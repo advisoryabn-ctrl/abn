@@ -144,6 +144,23 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 #toast.show{opacity:1;transform:translateX(-50%)}
 .spin{width:26px;height:26px;border:3px solid #E7EAF0;border-top-color:var(--gold);border-radius:50%;animation:sp 1s linear infinite;margin:30px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
+.st-rej{background:#F3E8E8;color:#8A3A3A}
+.alertc{border-inline-start:4px solid var(--red);padding:4px 14px}
+.al{display:flex;flex-direction:column;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.al:last-child{border:0}.al b{font-size:13px;color:var(--red)}.al span{font-size:13px}
+.track{list-style:none;margin:12px 0 4px}
+.track li{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--mute);font-size:13.5px}
+.track li i{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid #C3CCDA;display:grid;place-items:center;font-style:normal;font-size:11px;color:#fff}
+.track li.ok{color:var(--ink)}.track li.ok i{background:var(--green);border-color:var(--green)}
+.track li.cur{color:var(--navy);font-weight:700}.track li.cur i{border-color:var(--gold);background:var(--gold)}
+.abtn{display:block;width:100%;padding:13px;border-radius:12px;background:var(--navy);color:#fff;font-weight:700;margin-top:8px}
+.abtn.no{background:#FDECEA;color:var(--red)}.abtn.alt{background:#fff;color:var(--navy);border:1px solid var(--line)}
+.drow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.drow:last-child{border:0}.drow label{flex:1;font-size:13px}
+.drow input{width:150px;padding:8px;border:1px solid var(--line);border-radius:9px;font-size:14px;background:#fff;color:var(--ink)}
+.drow.miss label{color:var(--amber);font-weight:700}.drow.miss input{border-color:var(--gold)}
+.lg{padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.6}
+.lg:last-child{border:0}.lg small{display:block;color:var(--mute);font-size:11px}
 </style>
 </head>
 <body>
@@ -177,32 +194,83 @@ const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 
 const TYPES={
-  case:{label:'قضية محاسبية',steps:['استلام الملف وقرار الندب','دراسة المستندات','طلب مستندات إضافية','الاجتماع مع الأطراف','إعداد مسودة التقرير','المراجعة الداخلية','تسليم التقرير','اعتماد التقرير']},
+  case:{label:'قضية محاسبية',steps:[]},
   fs:{label:'مراجعة قوائم مالية',steps:['خطاب الارتباط','التخطيط وتقييم المخاطر','جمع المستندات','الاختبارات والإجراءات','مسودة القوائم والإيضاحات','المراجعة النهائية','إصدار التقرير']},
   report:{label:'تقرير',steps:['تحديد النطاق','جمع البيانات','التحليل','المسودة','المراجعة','التسليم']},
   tax:{label:'إقرار ضريبي',steps:['استلام البيانات','مطابقة الحسابات','إعداد الإقرار','مراجعة الإقرار','تقديم الإقرار','الإقفال']},
   other:{label:'أخرى',steps:['البدء','التنفيذ','المراجعة','التسليم']}
 };
-const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'}};
+/* مسار القضية المحاسبية */
+const FLOW=[['offer','استلام القضية وإرسال التسعير'],['accept','انتظار قبول العميل'],['pay','انتظار الدفع'],['expert','تعيين الخبير'],['report','إعداد التقرير الأولي'],['objection','مهلة الاعتراض'],['revise','تعديل التقرير وإرسال النهائي'],['done','مكتملة']];
+const FL=Object.fromEntries(FLOW);FL.rejected='العروض المرفوضة';
+const PCT={offer:5,accept:15,pay:30,expert:45,report:60,objection:80,revise:90,done:100,rejected:0};
+/* [نص الزر، المرحلة التالية، التاريخ الذي يُسجَّل] */
+const ACTS={
+  offer:[['تم إرسال العرض للعميل','accept','offer']],
+  accept:[['العميل قبل العرض','pay','accepted'],['لم يتم اختيارنا','rejected','rejected']],
+  pay:[['تم الدفع','expert','paid'],['العميل لم يدفع','rejected','rejected']],
+  expert:[['تم تعيين الخبير','report','expert']],
+  report:[['تم إرسال التقرير الأولي','objection','report']],
+  objection:[['لا يوجد اعتراض — إكمال القضية','done','done'],['يوجد اعتراض على التقرير','revise','objected'],['الشيخ أرجع التقرير','revise','returned']],
+  revise:[['تم إرسال التقرير النهائي','done','final']],
+  done:[['الشيخ أرجع التقرير','revise','returned']],
+  rejected:[['إعادة فتح العرض','reopen','']]
+};
+const FDATES=[['received','استلام القضية'],['offer','إرسال العرض'],['accepted','قبول العميل'],['paid','الدفع'],['expert','تعيين الخبير'],['report','إرسال التقرير الأولي'],['objected','الاعتراض'],['returned','إرجاع الشيخ للتقرير'],['final','إرسال التقرير النهائي'],['done','الاكتمال']];
+const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
+const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',mine:false,st:'all',q:'',sheet:null};
+const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
-const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const toISO=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayISO=()=>toISO(new Date());
+const D=iso=>new Date(iso+'T12:00:00');
+const addDays=(iso,n)=>{const d=D(iso);d.setDate(d.getDate()+n);return toISO(d)};
+/* أيام العمل: بدون الجمعة والسبت */
+const addWork=(iso,n)=>{const d=D(iso);while(n>0){d.setDate(d.getDate()+1);const g=d.getDay();if(g!==5&&g!==6)n--}return toISO(d)};
+const dayDiff=(a,b)=>Math.round((D(b)-D(a))/864e5);
 const fmtD=iso=>{if(!iso)return'—';const[y,m,d]=iso.split('-').map(Number);return d+' '+MONTHS[m-1]+' '+y};
 const parseTS=ts=>typeof ts==='string'?new Date(ts.replace(/(\.\d{3})\d+/,'$1').replace(' ','T')):new Date(ts);
 const tsMs=ts=>{const n=parseTS(ts).getTime();return isNaN(n)?0:n};
 const fmtDT=ts=>{if(!ts)return'';const d=parseTS(ts);if(isNaN(d))return'';return d.getDate()+' '+MONTHS[d.getMonth()]+' · '+pad(d.getHours())+':'+pad(d.getMinutes())};
-const pctOf=w=>{const s=w.steps||[];return s.length?Math.round(s.filter(x=>x.done).length*100/s.length):0};
-const statusOf=w=>{const p=pctOf(w);if(p===100&&(w.steps||[]).length)return'done';if(w.due&&w.due<todayISO())return'late';if(p===0)return'new';return'prog'};
 const typeL=t=>(TYPES[t]||TYPES.other).label;
 const myId=()=>S.session?.user?.id;
 const isAdmin=()=>S.me?.role==='admin';
-const nm=id=>!id?'غير مسند':id===myId()?'أنت':(S.profiles.find(p=>p.id===id)?.full_name||'موظف');
+const nm=id=>!id?'النظام':id===myId()?'أنت':(S.profiles.find(p=>p.id===id)?.full_name||'موظف');
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2300)}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+
+/* ---------- منطق المسار ---------- */
+const isFlow=w=>w.type==='case'&&!!(w.flow&&w.flow.stage);
+function eff(w){
+  const f=w.flow,s=f.stage,d=f.dates||{};let dl=null;
+  if(s==='accept')dl=d.offer?addWork(d.offer,5):null;
+  else if(s==='pay')dl=d.accepted?addWork(d.accepted,10):null;
+  else if(s==='expert')dl=d.paid?addWork(d.paid,10):null;
+  else if(s==='report')dl=d.expert?addDays(d.expert,30):(w.due||null);
+  else if(s==='objection')dl=d.report?addWork(d.report,5):null;
+  else if(s==='revise'){const b=[d.objected,d.returned].filter(Boolean).sort().pop();dl=b?addWork(b,10):null}
+  let stage=s,auto=false;
+  if(dl&&todayISO()>dl){if(s==='accept'||s==='pay'){stage='rejected';auto=true}else if(s==='objection'){stage='done';auto=true}}
+  return{stage,base:s,auto,dl};
+}
+const pctOf=w=>{if(isFlow(w))return PCT[eff(w).stage]??0;const s=w.steps||[];return s.length?Math.round(s.filter(x=>x.done).length*100/s.length):0};
+function statusOf(w){
+  if(isFlow(w)){const e=eff(w);if(e.stage==='done')return'done';if(e.stage==='rejected')return'rej';if(e.dl&&todayISO()>e.dl)return'late';return e.base==='offer'?'new':'prog'}
+  const p=pctOf(w);if(p===100&&(w.steps||[]).length)return'done';if(w.due&&w.due<todayISO())return'late';if(p===0)return'new';return'prog';
+}
+const doneAt=w=>{if(w.completed_at)return tsMs(w.completed_at);if(isFlow(w)){const e=eff(w);if(e.stage==='done'&&e.dl)return D(e.dl).getTime()}return 0};
+const keyDate=w=>(isFlow(w)?eff(w).dl:w.due)||'9';
+function rem(dl){const n=dayDiff(todayISO(),dl);if(n>1)return'باقي '+n+' يوم';if(n===1)return'ينتهي غدًا';if(n===0)return'ينتهي اليوم';return'متأخر '+(-n)+' يوم'}
+function dlText(e){
+  if(e.stage==='done')return e.auto?'اكتملت بانتهاء مهلة الاعتراض':'مكتملة';
+  if(e.stage==='rejected')return e.auto?'انتهت المهلة':'مرفوض';
+  if(!e.dl)return e.base==='offer'?'بانتظار إرسال العرض':'أدخل تاريخ المرحلة السابقة';
+  return rem(e.dl);
+}
 
 const IC={
   home:'<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
@@ -211,7 +279,7 @@ const IC={
   check:'<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg>'
 };
 
-/* ---------- auth ---------- */
+/* ---------- الدخول ---------- */
 $('#lf').addEventListener('submit',async e=>{
   e.preventDefault();const f=new FormData(e.target);const b=$('#lbtn');b.disabled=true;b.textContent='جاري الدخول…';
   const {error}=await sb.auth.signInWithPassword({email:String(f.get('email')).trim(),password:String(f.get('pass'))});
@@ -221,7 +289,7 @@ $('#lf').addEventListener('submit',async e=>{
 sb.auth.onAuthStateChange((_e,session)=>{const was=!!S.session;S.session=session;if(!!session!==was||!S.booted){S.booted=true;session?startApp():showLogin()}});
 function showLogin(){$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
 
-/* ---------- data ---------- */
+/* ---------- البيانات ---------- */
 let channel=null,loadTimer=null;
 async function load(){
   const [w,a,p]=await Promise.all([
@@ -232,6 +300,7 @@ async function load(){
   if(!w.error)S.works=w.data;if(!a.error)S.anns=a.data;if(!p.error)S.profiles=p.data;
   S.err=(w.error||a.error||p.error)?'تعذر تحميل البيانات، تأكد من الاتصال':null;
   S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();
+  if(S.sheet?.kind==='detail')loadAct(S.sheet.id);
 }
 const loadSoon=()=>{clearTimeout(loadTimer);loadTimer=setTimeout(load,300)};
 function startApp(){
@@ -245,13 +314,22 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.session
 async function updateWork(id,patch){
   S.works=S.works.map(w=>w.id===id?{...w,...patch}:w);renderAll();
   const {error}=await sb.from('works').update(patch).eq('id',id);
-  if(error){toast('تعذر الحفظ');load();return false}return true;
+  if(error){toast('تعذر الحفظ');load();return false}
+  loadSoon();return true;
 }
 async function rpc(fn,args){const {error}=await sb.rpc(fn,args);if(error)toast('تعذر الحفظ');load()}
 const withCompletion=(w,steps)=>{const all=steps.length>0&&steps.every(x=>x.done);return{steps,completed_at:all?(w.completed_at||new Date().toISOString()):null}};
 const local=(id,patch)=>{S.works=S.works.map(w=>w.id===id?{...w,...patch}:w);renderAll()};
+async function loadAct(id){
+  const {data,error}=await sb.from('activity').select('*').eq('work_id',id).order('created_at',{ascending:false}).limit(40);
+  if(error)return;S.act={id,rows:data||[]};drawAct();
+}
+function drawAct(){
+  const el=$('#dAct');if(!el||!S.act||S.act.id!==S.sheet?.id)return;
+  el.innerHTML=S.act.rows.length?S.act.rows.map(r=>`<div class="lg"><b>${esc(nm(r.actor))}</b> ${esc(r.action)}<small>${fmtDT(r.created_at)}</small></div>`).join(''):'<div class="meta" style="padding:8px 0">ما فيه نشاط مسجّل بعد.</div>';
+}
 
-/* ---------- render ---------- */
+/* ---------- العرض ---------- */
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
@@ -278,93 +356,137 @@ function renderView(){
   else v.innerHTML=n+vAnn();
 }
 function bar(p,st,cls=''){return`<div class="bar ${cls||(st==='done'?'done':st==='late'?'late':'')}"><i style="width:${p}%"></i></div>`}
-function wcard(w){const p=pctOf(w),s=statusOf(w),st=w.steps||[];
-  return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta"><span><b>${p}%</b> · ${st.filter(x=>x.done).length}/${st.length} مراحل</span><span>${esc(nm(w.assignee))} · ${w.due?fmtD(w.due):'بدون موعد'}</span></div></div>`}
+function wcard(w){
+  const p=pctOf(w),s=statusOf(w);let foot;
+  if(isFlow(w)){const e=eff(w);foot=`<span><b>${esc(FL[e.stage])}</b></span><span>${esc(dlText(e))}</span>`}
+  else{const st=w.steps||[];foot=`<span><b>${p}%</b> · ${st.filter(x=>x.done).length}/${st.length} مراحل</span><span>${w.due?'التسليم '+fmtD(w.due):'بدون موعد'}</span>`}
+  return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta">${foot}</div></div>`;
+}
+/* تنبيهات الجلسات والمهل */
+function alerts(){
+  const t=todayISO(),tm=addDays(t,1),a=[];
+  S.works.forEach(w=>{
+    if(w.hearing===t)a.push(['🔔 جلسة اليوم',w]);else if(w.hearing===tm)a.push(['🔔 جلسة غدًا',w]);
+    if(isFlow(w)){const e=eff(w);if(e.dl&&e.stage!=='done'&&e.stage!=='rejected'){const n=dayDiff(t,e.dl);if(n<0)a.push(['⏰ تجاوزت المهلة — '+FL[e.stage],w]);else if(n<=2)a.push(['⏰ '+rem(e.dl)+' — '+FL[e.stage],w])}}
+    else if(w.due&&statusOf(w)!=='done'){const n=dayDiff(t,w.due);if(n<0)a.push(['⏰ تأخر موعد التسليم',w]);else if(n<=2)a.push(['⏰ التسليم: '+rem(w.due),w])}
+  });
+  return a.length?`<div class="card alertc">${a.slice(0,8).map(([l,w])=>`<div class="al" data-open="${esc(w.id)}"><b>${esc(l)}</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
+}
 function vHome(){
-  const all=S.works,active=all.filter(w=>statusOf(w)!=='done'),late=all.filter(w=>statusOf(w)==='late');
+  const all=S.works,active=all.filter(w=>!['done','rej'].includes(statusOf(w))),late=active.filter(w=>statusOf(w)==='late');
   const ms=new Date();ms.setDate(1);ms.setHours(0,0,0,0);
-  const doneM=all.filter(w=>w.completed_at&&tsMs(w.completed_at)>=ms.getTime()).length;
+  const doneM=all.filter(w=>statusOf(w)==='done'&&doneAt(w)>=ms.getTime()).length;
   const avg=active.length?Math.round(active.reduce((a,w)=>a+pctOf(w),0)/active.length):0;
   let h=`<div class="card"><div class="row" style="align-items:flex-end"><b>متوسط إنجاز الأعمال القائمة</b><span class="big">${avg}%</span></div>${bar(avg,'','gold')}<div class="nums"><div class="num"><b style="color:var(--blue2)">${active.length}</b><span>أعمال قائمة</span></div><div class="num"><b style="color:var(--red)">${late.length}</b><span>متأخرة</span></div><div class="num"><b style="color:var(--green)">${doneM}</b><span>أُنجزت هذا الشهر</span></div></div></div>`;
+  h+=alerts();
   const imp=S.anns.find(a=>a.important)||S.anns[0];
   if(imp)h+=`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`;
-  const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t&&statusOf(w)!=='done').sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,3);
+  const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t).sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,4);
   if(hs.length)h+=`<div class="sec"><h2>الجلسات القادمة</h2></div><div class="card" style="padding:4px 14px">`+hs.map(w=>{const[,m,d]=w.hearing.split('-').map(Number);return`<div class="hear" data-open="${esc(w.id)}"><div class="cal"><b>${d}</b><small>${MONTHS[m-1]}</small></div><div style="flex:1;min-width:0"><b style="display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.title)}</b><span class="meta">${esc(w.ref||w.client||'')}${w.hearing===t?' · <b style="color:var(--red)">اليوم</b>':''}</span></div></div>`}).join('')+`</div>`;
-  const mine=all.filter(w=>w.assignee===myId()&&statusOf(w)!=='done').sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'));
-  h+=`<div class="sec"><h2>أعمالي</h2><button data-tab="works" data-mine="1">عرض الكل</button></div>`;
-  h+=mine.length?mine.slice(0,5).map(wcard).join(''):`<div class="card empty">${all.length?'ما فيه أعمال مسندة لك حاليًا.':'ما فيه أعمال بعد.<br>اضغط <b>+</b> لإضافة أول عمل.'}</div>`;
+  const ord={late:0,prog:1,new:2};
+  const top=[...active].sort((a,b)=>ord[statusOf(a)]-ord[statusOf(b)]||keyDate(a).localeCompare(keyDate(b)));
+  h+=`<div class="sec"><h2>أعمال تحتاج متابعة</h2><button data-tab="works">عرض الكل</button></div>`;
+  h+=top.length?top.slice(0,5).map(wcard).join(''):`<div class="card empty">${all.length?'ما فيه أعمال قائمة حاليًا.':'ما فيه أعمال بعد.<br>اضغط <b>+</b> لإضافة أول عمل.'}</div>`;
   return h;
 }
 function vWorksShell(){
-  const chips=[['all','الكل'],['prog','قيد التنفيذ'],['late','متأخرة'],['new','لم تبدأ'],['done','مكتملة']];
-  return`<div class="seg"><button data-mine="1" class="${S.mine?'on':''}">أعمالي</button><button data-mine="0" class="${!S.mine?'on':''}">كل أعمال المكتب</button></div><input class="input" id="q" placeholder="ابحث بالعنوان أو العميل أو رقم القضية" value="${esc(S.q)}" style="margin-bottom:10px"><div class="chips">${chips.map(([k,l])=>`<button class="chip ${S.st===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div><div id="list"></div>`;
+  const chips=[['all','الكل'],['prog','قيد التنفيذ'],['late','متأخرة'],['new','لم تبدأ'],['done','مكتملة'],['rej','العروض المرفوضة']];
+  return`<input class="input" id="q" placeholder="ابحث بالعنوان أو العميل أو رقم القضية" value="${esc(S.q)}" style="margin-bottom:10px"><div class="chips">${chips.map(([k,l])=>`<button class="chip ${S.st===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div><div id="list"></div>`;
 }
 function drawList(){
-  const el=$('#list');if(!el)return;const q=S.q.trim().toLowerCase();const order={late:0,prog:1,new:2,done:3};
-  const ws=S.works.filter(w=>(!S.mine||w.assignee===myId())&&(S.st==='all'||statusOf(w)===S.st)&&(!q||[w.title,w.client,w.ref].join(' ').toLowerCase().includes(q))).sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(a.due||'9').localeCompare(b.due||'9'));
-  el.innerHTML=ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>';
+  const el=$('#list');if(!el)return;const q=S.q.trim().toLowerCase();const order={late:0,prog:1,new:2,done:3,rej:4};
+  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej':s===S.st)&&(!q||[w.title,w.client,w.ref,w.code].join(' ').toLowerCase().includes(q))})
+    .sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(statusOf(a)==='done'?doneAt(b)-doneAt(a):keyDate(a).localeCompare(keyDate(b))));
+  el.innerHTML=(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
 }
 function vAnn(){
   if(!S.anns.length)return`<div class="card empty">ما فيه تعاميم بعد.${isAdmin()?'<br>اضغط <b>+</b> لنشر أول تعميم.':''}</div>`;
   return[...S.anns].sort((a,b)=>(b.important?1:0)-(a.important?1:0)||tsMs(b.created_at)-tsMs(a.created_at)).map(a=>`<div class="card annc ${a.important?'goldEdge':''}"><div class="row"><h3 style="font-size:15.5px">${esc(a.title)}</h3>${a.important?'<span class="pill tag">مهم</span>':''}</div><p>${esc(a.body)}</p><div class="row meta" style="margin-top:10px"><span>${esc(nm(a.created_by))} · ${fmtDT(a.created_at)}</span>${isAdmin()?`<button class="pill st-late" data-delann="${esc(a.id)}">حذف</button>`:''}</div></div>`).join('');
 }
 
-/* ---------- sheets ---------- */
+/* ---------- النوافذ ---------- */
 function openSheet(html){$('#panel').innerHTML='<div class="grab"></div>'+html;$('#sheet').classList.remove('hidden');$('#panel').scrollTop=0;document.body.style.overflow='hidden'}
 function closeSheet(){S.sheet=null;$('#sheet').classList.add('hidden');$('#panel').innerHTML='';document.body.style.overflow=''}
 function openDetail(id){
+  const w=S.works.find(x=>x.id===id);if(!w)return;const fl=isFlow(w);
   S.sheet={kind:'detail',id};
   openSheet(`<div class="row"><span></span><button class="x" data-act="close">×</button></div><div id="dBody"></div>
-  <div class="inl"><input class="input" id="nstep" placeholder="أضف مرحلة جديدة" maxlength="80"><button class="sbtn" data-act="addstep">إضافة</button></div>
+  ${fl?'':'<div class="inl"><input class="input" id="nstep" placeholder="أضف مرحلة جديدة" maxlength="80"><button class="sbtn" data-act="addstep">إضافة</button></div>'}
   <div class="sec"><h2>التحديثات والملاحظات</h2></div>
   <div class="inl"><textarea class="input" id="nnote" rows="2" placeholder="مثال: تم استلام المستندات من العميل" maxlength="600" style="resize:none"></textarea><button class="sbtn" data-act="addnote">نشر</button></div>
   <div id="dNotes"></div>
+  <div class="sec"><h2>سجل النشاط</h2></div><div id="dAct" class="card" style="padding:4px 14px"><div class="meta" style="padding:8px 0">جاري التحميل…</div></div>
   <div class="acts"><button class="btn2" data-act="editwork">تعديل البيانات</button>${isAdmin()?'<button class="btnd" data-act="delwork">حذف</button>':''}</div>`);
-  refreshDetail();
+  refreshDetail();loadAct(id);
+}
+function flowBody(w){
+  const e=eff(w),d=w.flow.dates||{},idx=FLOW.findIndex(x=>x[0]===e.base),p=pctOf(w),s=statusOf(w);
+  const open=e.stage!=='done'&&e.stage!=='rejected';
+  const track=FLOW.slice(0,7).map(([k,l],i)=>{const ok=e.base==='done'||(e.base!=='rejected'&&i<idx)||(e.stage==='done');const cur=!ok&&k===e.base;return`<li class="${ok?'ok':cur?'cur':''}"><i>${ok?'✓':''}</i>${esc(l)}</li>`}).join('');
+  const acts=(ACTS[e.base]||[]).map((a,i)=>`<button class="abtn ${a[1]==='rejected'?'no':i>0||a[1]==='reopen'||e.base==='done'?'alt':''}" data-fact="${i}">${esc(a[0])}</button>`).join('');
+  const dates=FDATES.map(([k,l])=>{const v=k==='received'?w.received:d[k];const miss=open&&NEED[k]&&idx>=NEED[k]&&!v;return`<div class="drow ${miss?'miss':''}"><label>${esc(l)}${miss?' — ناقص':''}</label><input type="date" data-fdate="${k}" value="${esc(v)}"></div>`}).join('');
+  return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
+  <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
+  <div class="info"><div><small>رقم القضية</small><b>${esc(w.ref||'—')}</b></div><div><small>الرقم المرجعي</small><b dir="ltr">${esc(w.code||'—')}</b></div><div><small>الجلسة القادمة</small><b>${fmtD(w.hearing)}</b></div><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div></div>
+  <div class="card"><div class="row" style="align-items:flex-end"><b>${esc(FL[e.stage])}</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}
+  <div class="meta">${esc(dlText(e))}${open&&e.dl?' · آخر موعد '+fmtD(e.dl):''}${e.stage==='rejected'&&w.flow.reason?' · '+esc(w.flow.reason):''}</div>
+  <ul class="track">${track}</ul>
+  <div class="fld" style="margin-top:10px"><label class="lbl">تاريخ الإجراء</label><input type="date" id="adate" class="input" value="${todayISO()}"></div>${acts}</div>
+  <div class="card" style="margin:0"><b>تواريخ المراحل</b><div class="meta" style="margin:2px 0 6px">تقدر تعدّل أي تاريخ أو تعبّي الناقص، والمهل تنحسب تلقائيًا.</div>${dates}</div>`;
+}
+function stepsBody(w){
+  const p=pctOf(w),s=statusOf(w),st=w.steps||[];
+  return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
+  <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
+  <div class="info"><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div><div><small>موعد التسليم</small><b>${fmtD(w.due)}</b></div><div><small>رقم القضية / المرجع</small><b>${esc(w.ref||'—')}</b></div><div><small>${w.code?'الرقم المرجعي':'الجلسة القادمة'}</small><b dir="${w.code?'ltr':'rtl'}">${w.code?esc(w.code):fmtD(w.hearing)}</b></div></div>
+  <div class="card" style="margin:0"><div class="row" style="align-items:flex-end"><b>نسبة الإنجاز</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}<div class="meta">${st.filter(x=>x.done).length} من ${st.length} مراحل مكتملة${w.completed_at?' · اكتمل '+fmtD(toISO(parseTS(w.completed_at))):''}</div>
+  <ul class="steps">${st.map((x,i)=>`<li class="${x.done?'d':''}"><button class="chk ${x.done?'on':''}" data-step="${i}">${x.done?IC.check:''}</button><span class="t"><span>${esc(x.t)}</span>${x.done&&x.at?`<span class="by">${x.by?esc(nm(x.by))+' · ':''}${fmtDT(x.at)}</span>`:''}</span><button class="rm" data-rmstep="${i}">×</button></li>`).join('')||'<li class="meta">ما فيه مراحل.</li>'}</ul></div>`;
 }
 function refreshDetail(){
   const w=S.works.find(x=>x.id===S.sheet?.id);const b=$('#dBody');if(!b)return;if(!w){closeSheet();return}
-  const p=pctOf(w),s=statusOf(w),st=w.steps||[];
-  b.innerHTML=`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
-  <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
-  <div class="info"><div><small>المسؤول</small><b>${esc(nm(w.assignee))}</b></div><div><small>تاريخ التسليم</small><b>${fmtD(w.due)}</b></div><div><small>رقم القضية / المرجع</small><b>${esc(w.ref||'—')}</b></div><div><small>الجلسة القادمة</small><b>${fmtD(w.hearing)}</b></div></div>
-  <div class="card" style="margin:0"><div class="row" style="align-items:flex-end"><b>نسبة الإنجاز</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}<div class="meta">${st.filter(x=>x.done).length} من ${st.length} مراحل مكتملة${w.completed_at?' · اكتمل '+fmtDT(w.completed_at):''}</div>
-  <ul class="steps">${st.map((x,i)=>`<li class="${x.done?'d':''}"><button class="chk ${x.done?'on':''}" data-step="${i}">${x.done?IC.check:''}</button><span class="t"><span>${esc(x.t)}</span>${x.done&&x.at?`<span class="by">${esc(nm(x.by))} · ${fmtDT(x.at)}</span>`:''}</span><button class="rm" data-rmstep="${i}">×</button></li>`).join('')||'<li class="meta">ما فيه مراحل.</li>'}</ul></div>`;
+  const keep=$('#adate')?.value;
+  b.innerHTML=isFlow(w)?flowBody(w):stepsBody(w);
+  if(keep&&$('#adate'))$('#adate').value=keep;
   const n=$('#dNotes');const notes=[...(w.notes||[])].reverse();
   n.innerHTML=notes.length?notes.map(x=>`<div class="note"><p>${esc(x.text)}</p><small>${esc(nm(x.by))} · ${fmtDT(x.at)}</small></div>`).join(''):'<div class="meta" style="padding:8px 4px">ما فيه تحديثات بعد.</div>';
+  drawAct();
 }
 function openWorkForm(id){
   const w=id?S.works.find(x=>x.id===id):null;const t=w?(w.type||'other'):'case';
-  S.sheet={kind:'form',id:id||null,type:t,assignee:w?w.assignee:myId(),steps:w?null:[...TYPES[t].steps]};
+  S.sheet={kind:'form',id:id||null,type:t,flow:w?isFlow(w):true,steps:w?null:[...TYPES[t].steps]};
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">${w?'تعديل بيانات العمل':'عمل جديد'}</h2><button class="x" data-act="close">×</button></div>
   <form class="f" id="wf">
-   <label class="lbl">نوع العمل</label><div class="wrap" id="ftypes"></div>
+   ${w?'':'<label class="lbl">نوع العمل</label><div class="wrap" id="ftypes"></div>'}
    <div class="fld"><label class="lbl">عنوان العمل</label><input name="title" required maxlength="120" value="${esc(w?.title)}" placeholder="مثال: تقرير خبرة محاسبية – شركة ..."></div>
    <div class="fld"><label class="lbl">العميل / الجهة</label><input name="client" maxlength="120" value="${esc(w?.client)}"></div>
    <div class="fld"><label class="lbl">رقم القضية / المرجع</label><input name="ref" maxlength="40" value="${esc(w?.ref)}"></div>
-   <label class="lbl">المسؤول</label><div class="wrap" id="fass"></div>
-   <div class="fld"><label class="lbl">تاريخ التسليم</label><input type="date" name="due" value="${esc(w?.due)}"></div>
+   <div class="fld"><label class="lbl">تاريخ الاستلام</label><input type="date" name="received" value="${esc(w?w.received:todayISO())}"></div>
+   <div class="fld" id="fdue"><label class="lbl">موعد التسليم</label><input type="date" name="due" value="${esc(w?.due)}"></div>
    <div class="fld"><label class="lbl">الجلسة القادمة</label><input type="date" name="hearing" value="${esc(w?.hearing)}"></div>
-   ${w?'':`<label class="lbl">مراحل العمل (تقدر تعدلها لاحقًا)</label><div id="fsteps"></div><div class="inl" style="margin:4px 0 16px"><input class="input" id="fstep" placeholder="أضف مرحلة" maxlength="80"><button type="button" class="sbtn" data-act="fstep">إضافة</button></div>`}
+   ${w?'':`<div class="notice" id="fcase">القضية تمشي في مسار ثابت: التسعير ← قبول العميل (5 أيام عمل) ← الدفع (10 أيام عمل) ← تعيين الخبير (10 أيام عمل) ← التقرير الأولي (30 يوم) ← الاعتراض (5 أيام عمل) ← التقرير النهائي (10 أيام عمل).</div><div id="fstepsBox"><label class="lbl">مراحل العمل (تقدر تعدلها لاحقًا)</label><div id="fsteps"></div><div class="inl" style="margin:4px 0 16px"><input class="input" id="fstep" placeholder="أضف مرحلة" maxlength="80"><button type="button" class="sbtn" data-act="fstep">إضافة</button></div></div>`}
    <button class="primary" type="submit">${w?'حفظ التعديلات':'إضافة العمل'}</button>
   </form>`);
   drawForm();
   $('#wf').addEventListener('submit',e=>submitWork(e,w));
 }
 function drawForm(){
-  const f=S.sheet;
-  $('#ftypes').innerHTML=Object.entries(TYPES).map(([k,v])=>`<button type="button" class="chip ${f.type===k?'on':''}" data-ftype="${k}">${v.label}</button>`).join('');
-  $('#fass').innerHTML=S.profiles.map(p=>`<button type="button" class="chip ${f.assignee===p.id?'on':''}" data-fass="${esc(p.id)}">${p.id===myId()?'أنا ('+esc(p.full_name||'')+')':esc(p.full_name||'موظف')}</button>`).join('')+`<button type="button" class="chip ${!f.assignee?'on':''}" data-fass="">غير مسند</button>`;
-  const fs=$('#fsteps');if(fs)fs.innerHTML=f.steps.map((s,i)=>`<span class="spill">${esc(s)}<button type="button" data-rmdraft="${i}">×</button></span>`).join('');
+  const f=S.sheet;const ft=$('#ftypes');
+  if(ft){f.flow=f.type==='case';ft.innerHTML=Object.entries(TYPES).map(([k,v])=>`<button type="button" class="chip ${f.type===k?'on':''}" data-ftype="${k}">${v.label}</button>`).join('')}
+  $('#fdue').classList.toggle('hidden',f.flow);
+  $('#fcase')?.classList.toggle('hidden',!f.flow);
+  $('#fstepsBox')?.classList.toggle('hidden',f.flow);
+  const fs=$('#fsteps');if(fs&&f.steps)fs.innerHTML=f.steps.map((s,i)=>`<span class="spill">${esc(s)}<button type="button" data-rmdraft="${i}">×</button></span>`).join('');
 }
 async function submitWork(e,w){
-  e.preventDefault();const f=new FormData(e.target);const btn=e.target.querySelector('.primary');
-  const data={type:S.sheet.type,title:String(f.get('title')||'').trim(),client:String(f.get('client')||'').trim()||null,ref:String(f.get('ref')||'').trim()||null,assignee:S.sheet.assignee||null,due:f.get('due')||null,hearing:f.get('hearing')||null};
+  e.preventDefault();const f=new FormData(e.target);const btn=e.target.querySelector('.primary');const fl=S.sheet.flow;
+  const data={title:String(f.get('title')||'').trim(),client:String(f.get('client')||'').trim()||null,ref:String(f.get('ref')||'').trim()||null,received:f.get('received')||null,hearing:f.get('hearing')||null};
+  if(!fl)data.due=f.get('due')||null;
   if(!data.title){toast('اكتب عنوان العمل');return}
   btn.disabled=true;
   if(w){if(await updateWork(w.id,data)){toast('تم الحفظ');openDetail(w.id)}else btn.disabled=false}
   else{
-    const {error}=await sb.from('works').insert({...data,steps:S.sheet.steps.map(t=>({t,done:false})),notes:[]});
+    const row=fl?{...data,type:'case',steps:[],notes:[],flow:{stage:'offer',dates:{}}}:{...data,type:S.sheet.type,steps:S.sheet.steps.map(t=>({t,done:false})),notes:[]};
+    const {error}=await sb.from('works').insert(row);
     if(error){toast('تعذر الإضافة');btn.disabled=false;return}
     toast('تمت إضافة العمل');closeSheet();load();
   }
@@ -385,29 +507,50 @@ function openAccount(){
   S.sheet={kind:'acc'};
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">${esc(S.me?.full_name||'حسابي')}</h2><button class="x" data-act="close">×</button></div>
   <div class="card"><div class="meta">البريد الإلكتروني</div><b dir="ltr" style="display:block;text-align:right">${esc(S.session?.user?.email)}</b><div class="meta" style="margin-top:10px">الصلاحية</div><b>${isAdmin()?'مدير':'موظف'}</b></div>
+  ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
   <button class="primary" style="background:var(--red)" data-act="logout">تسجيل الخروج</button>`);
 }
+async function openLog(){
+  S.sheet={kind:'log'};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">سجل النشاط العام</h2><button class="x" data-act="close">×</button></div><div id="gLog" class="card" style="padding:4px 14px"><div class="spin"></div></div>`);
+  const {data,error}=await sb.from('activity').select('*').order('created_at',{ascending:false}).limit(150);
+  const el=$('#gLog');if(!el)return;
+  el.innerHTML=error?'<div class="meta" style="padding:8px 0">تعذر تحميل السجل.</div>':(data.length?data.map(r=>`<div class="lg"><b>${esc(nm(r.actor))}</b> ${esc(r.action)}${r.work_title?' — '+esc(r.work_title):''}<small>${fmtDT(r.created_at)}</small></div>`).join(''):'<div class="meta" style="padding:8px 0">ما فيه نشاط مسجّل بعد.</div>');
+}
 
-/* ---------- events ---------- */
+/* ---------- الأحداث ---------- */
 let armT=null;
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-mine],[data-st],[data-delann],[data-ftype],[data-fass]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact]');if(!t)return;
   const d=t.dataset;
-  if(d.tab){if(d.mine)S.mine=d.mine==='1';S.tab=d.tab;if(S.tab==='ann')ls('abn_ann_seen',String(Date.now()));window.scrollTo(0,0);renderAll();return}
-  if(d.mine!==undefined){S.mine=d.mine==='1';renderView();return}
+  if(d.tab){S.tab=d.tab;if(S.tab==='ann')ls('abn_ann_seen',String(Date.now()));window.scrollTo(0,0);renderAll();return}
   if(d.st){S.st=d.st;document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
   if(d.open){openDetail(d.open);return}
-  if(d.ftype){S.sheet.type=d.ftype;if(!S.sheet.id)S.sheet.steps=[...TYPES[d.ftype].steps];drawForm();return}
-  if(d.fass!==undefined){S.sheet.assignee=d.fass||null;drawForm();return}
+  if(d.ftype){S.sheet.type=d.ftype;S.sheet.steps=[...TYPES[d.ftype].steps];drawForm();return}
   if(d.rmdraft!==undefined){S.sheet.steps.splice(+d.rmdraft,1);drawForm();return}
   if(d.delann){arm(t,'تأكيد الحذف','حذف',async()=>{const {error}=await sb.from('announcements').delete().eq('id',d.delann);toast(error?'تعذر الحذف':'تم الحذف');load()});return}
   const w=S.sheet?.kind==='detail'?S.works.find(x=>x.id===S.sheet.id):null;
+  if(d.fact!==undefined&&w&&isFlow(w)){
+    const a=(ACTS[eff(w).base]||[])[+d.fact];if(!a)return;
+    const dt=$('#adate')?.value||todayISO();const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};
+    if(a[1]==='reopen'){f.stage=f.prev||'accept';delete f.prev;delete f.reason;delete f.dates.rejected}
+    else{
+      if(a[1]==='rejected'){f.prev=f.stage;f.reason=a[0]}
+      f.dates[a[2]]=dt;
+      if(a[1]==='done')f.dates.done=dt;
+      if(a[1]==='revise')delete f.dates.done;
+      f.stage=a[1];
+    }
+    if(await updateWork(w.id,{flow:f}))toast(a[1]==='reopen'?'تمت إعادة فتح العرض':'انتقلت إلى: '+FL[f.stage]);
+    return;
+  }
   if(d.step!==undefined&&w){const steps=(w.steps||[]).map(x=>({...x}));const s=steps[+d.step];if(!s)return;s.done=!s.done;if(s.done){s.at=new Date().toISOString();s.by=myId()}else{delete s.at;delete s.by}local(w.id,withCompletion(w,steps));if(steps.every(x=>x.done))toast('اكتمل العمل 100%');rpc('set_step',{p_work:w.id,p_idx:+d.step,p_done:s.done});return}
   if(d.rmstep!==undefined&&w){arm(t,'حذف؟','×',()=>{const i=+d.rmstep;local(w.id,withCompletion(w,w.steps.filter((_,k)=>k!==i)));rpc('remove_step',{p_work:w.id,p_idx:i})});return}
   switch(d.act){
     case'close':closeSheet();break;
     case'account':openAccount();break;
+    case'log':openLog();break;
     case'logout':closeSheet();await sb.auth.signOut();break;
     case'tipoff':ls('abn_tip_off','1');renderView();break;
     case'fstep':{const i=$('#fstep');const v=i.value.trim();if(v){S.sheet.steps.push(v);i.value='';drawForm()}break}
@@ -416,6 +559,14 @@ document.addEventListener('click',async e=>{
     case'editwork':if(w)openWorkForm(w.id);break;
     case'delwork':if(w)arm(t,'اضغط مرة ثانية للتأكيد','حذف',async()=>{const id=w.id;closeSheet();const {error}=await sb.from('works').delete().eq('id',id);toast(error?'تعذر الحذف':'تم حذف العمل');load()});break;
   }
+});
+document.addEventListener('change',e=>{
+  const k=e.target.dataset?.fdate;if(!k)return;
+  const w=S.sheet?.kind==='detail'?S.works.find(x=>x.id===S.sheet.id):null;if(!w||!isFlow(w))return;
+  const v=e.target.value||null;
+  if(k==='received'){updateWork(w.id,{received:v});return}
+  const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};if(v)f.dates[k]=v;else delete f.dates[k];
+  updateWork(w.id,{flow:f});
 });
 document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='nstep'||e.target.id==='fstep')){e.preventDefault();document.querySelector(e.target.id==='nstep'?'[data-act=addstep]':'[data-act=fstep]').click()}});
