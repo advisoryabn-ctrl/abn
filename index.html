@@ -333,7 +333,7 @@ function drawAct(){
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
-  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة']}[S.tab];
+  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar" data-act="account">${esc((S.me?.full_name||'م').trim().charAt(0))}</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&(S.tab!=='ann'||isAdmin())));
 }
