@@ -169,6 +169,8 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .msg small{font-size:10.5px;color:var(--mute)}.msg.me small{color:#B8C7DD}
 .cbadge{font-size:11px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap}
 .chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
+.dwrap{display:flex;gap:8px}.dwrap input{flex:1;min-width:0}
+.dclr{flex:none;padding:0 12px;min-height:38px;border-radius:10px;background:#fff;border:1px solid var(--line);color:var(--red);font-size:13px}
 </style>
 </head>
 <body>
@@ -468,7 +470,7 @@ function flowBody(w){
   const open=e.stage!=='done'&&e.stage!=='rejected';
   const track=FLOW.slice(0,7).map(([k,l],i)=>{const ok=e.base==='done'||(e.base!=='rejected'&&i<idx)||(e.stage==='done');const cur=!ok&&k===e.base;return`<li class="${ok?'ok':cur?'cur':''}"><i>${ok?'✓':''}</i>${esc(l)}</li>`}).join('');
   const acts=(ACTS[e.base]||[]).map((a,i)=>`<button class="abtn ${a[1]==='rejected'?'no':i>0||a[1]==='reopen'||e.base==='done'?'alt':''}" data-fact="${i}">${esc(a[0])}</button>`).join('');
-  const dates=FDATES.map(([k,l])=>{const v=k==='received'?w.received:d[k];const miss=open&&NEED[k]&&idx>=NEED[k]&&!v;return`<div class="drow ${miss?'miss':''}"><label>${esc(l)}${miss?' — ناقص':''}</label><input type="date" data-fdate="${k}" value="${esc(v)}"></div>`}).join('');
+  const dates=FDATES.map(([k,l])=>{const v=k==='received'?w.received:d[k];const miss=open&&NEED[k]&&idx>=NEED[k]&&!v;return`<div class="drow ${miss?'miss':''}"><label>${esc(l)}${miss?' — ناقص':''}</label><input type="date" data-fdate="${k}" value="${esc(v)}"><button type="button" class="dclr" data-clr="1">مسح</button></div>`}).join('');
   return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
   <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
   <div class="info"><div><small>رقم القضية</small><b>${esc(w.ref||'—')}</b></div><div><small>الرقم المرجعي</small><b dir="ltr">${esc(w.code||'—')}</b></div><div><small>الجلسة القادمة</small><b>${fmtD(w.hearing)}</b></div><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div></div>
@@ -504,9 +506,9 @@ function openWorkForm(id){
    <div class="fld"><label class="lbl">عنوان العمل</label><input name="title" required maxlength="120" value="${esc(w?.title)}" placeholder="مثال: تقرير خبرة محاسبية – شركة ..."></div>
    <div class="fld"><label class="lbl">العميل / الجهة</label><input name="client" maxlength="120" value="${esc(w?.client)}"></div>
    <div class="fld"><label class="lbl">رقم القضية / المرجع</label><input name="ref" maxlength="40" value="${esc(w?.ref)}"></div>
-   <div class="fld"><label class="lbl">تاريخ الاستلام</label><input type="date" name="received" value="${esc(w?w.received:todayISO())}"></div>
-   <div class="fld" id="fdue"><label class="lbl">موعد التسليم</label><input type="date" name="due" value="${esc(w?.due)}"></div>
-   <div class="fld"><label class="lbl">الجلسة القادمة</label><input type="date" name="hearing" value="${esc(w?.hearing)}"></div>
+   <div class="fld"><label class="lbl">تاريخ الاستلام</label><div class="dwrap"><input type="date" name="received" value="${esc(w?w.received:todayISO())}"><button type="button" class="dclr" data-clr="1">مسح</button></div></div>
+   <div class="fld" id="fdue"><label class="lbl">موعد التسليم</label><div class="dwrap"><input type="date" name="due" value="${esc(w?.due)}"><button type="button" class="dclr" data-clr="1">مسح</button></div></div>
+   <div class="fld"><label class="lbl">الجلسة القادمة</label><div class="dwrap"><input type="date" name="hearing" value="${esc(w?.hearing)}"><button type="button" class="dclr" data-clr="1">مسح</button></div></div>
    ${w?'':`<div class="notice" id="fcase">القضية تمشي في مسار ثابت: التسعير ← قبول العميل (5 أيام عمل) ← الدفع (10 أيام عمل) ← تعيين الخبير (10 أيام عمل) ← التقرير الأولي (30 يوم) ← الاعتراض (5 أيام عمل) ← التقرير النهائي (10 أيام عمل).</div><div id="fstepsBox"><label class="lbl">مراحل العمل (تقدر تعدلها لاحقًا)</label><div id="fsteps"></div><div class="inl" style="margin:4px 0 16px"><input class="input" id="fstep" placeholder="أضف مرحلة" maxlength="80"><button type="button" class="sbtn" data-act="fstep">إضافة</button></div></div>`}
    <button class="primary" type="submit">${w?'حفظ التعديلات':'إضافة العمل'}</button>
   </form>`);
@@ -566,8 +568,9 @@ async function openLog(){
 let armT=null;
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr]');if(!t)return;
   const d=t.dataset;
+  if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
   if(d.tab){S.tab=d.tab;if(S.tab==='ann')ls('abn_ann_seen',String(Date.now()));window.scrollTo(0,0);renderAll();return}
   if(d.st){S.st=d.st;document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
   if(d.open){openDetail(d.open);return}
