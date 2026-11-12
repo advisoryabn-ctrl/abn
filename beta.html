@@ -161,6 +161,14 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .drow.miss label{color:var(--amber);font-weight:700}.drow.miss input{border-color:var(--gold)}
 .lg{padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.6}
 .lg:last-child{border:0}.lg small{display:block;color:var(--mute);font-size:11px}
+.chat{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.msg{align-self:flex-start;max-width:85%;background:#fff;border-radius:14px;padding:8px 12px}
+.msg.me{align-self:flex-end;background:var(--navy);color:#fff}
+.msg b{font-size:11.5px;color:var(--blue2);display:block}.msg.me b{color:var(--gold2)}
+.msg p{line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.msg small{font-size:10.5px;color:var(--mute)}.msg.me small{color:#B8C7DD}
+.cbadge{font-size:11px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap}
+.chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
 </style>
 </head>
 <body>
@@ -220,7 +228,7 @@ const FDATES=[['received','استلام القضية'],['offer','إرسال ال
 const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
 const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null};
+const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -299,7 +307,7 @@ async function load(){
   ]);
   if(!w.error)S.works=w.data;if(!a.error)S.anns=a.data;if(!p.error)S.profiles=p.data;
   S.err=(w.error||a.error||p.error)?'تعذر تحميل البيانات، تأكد من الاتصال':null;
-  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();
+  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();
   if(S.sheet?.kind==='detail')loadAct(S.sheet.id);
 }
 const loadSoon=()=>{clearTimeout(loadTimer);loadTimer=setTimeout(load,300)};
@@ -307,7 +315,7 @@ function startApp(){
   $('#login').classList.add('hidden');['#app','#tabs'].forEach(s=>$(s).classList.remove('hidden'));
   S.loaded=false;renderAll();load();
   if(channel)sb.removeChannel(channel);
-  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).subscribe();
+  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).subscribe();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.session)load()});
 
@@ -329,18 +337,55 @@ function drawAct(){
   el.innerHTML=S.act.rows.length?S.act.rows.map(r=>`<div class="lg"><b>${esc(nm(r.actor))}</b> ${esc(r.action)}<small>${fmtDT(r.created_at)}</small></div>`).join(''):'<div class="meta" style="padding:8px 0">ما فيه نشاط مسجّل بعد.</div>';
 }
 
+/* ---------- المحادثة داخل كل عمل ---------- */
+function seenMap(){try{return JSON.parse(ls('abn_chat_seen')||'{}')||{}}catch(e){return{}}}
+function chatBase(){let b=+(ls('abn_chat_base')||0);if(!b){b=Date.now();ls('abn_chat_base',String(b))}return b}
+function unreadOf(id){const s=Math.max(seenMap()[id]||0,chatBase());return S.msgs.filter(m=>m.work_id===id&&m.author!==myId()&&tsMs(m.created_at)>s)}
+function markSeen(id){const m=seenMap();m[id]=Date.now();ls('abn_chat_seen',JSON.stringify(m))}
+async function loadMsgs(){
+  const {data,error}=await sb.from('messages').select('id,work_id,author,created_at').order('created_at',{ascending:false}).limit(500);
+  if(error)return;S.msgs=data||[];
+  if(S.sheet?.kind==='detail')markSeen(S.sheet.id);
+  renderNav();if(!S.sheet)renderView();
+}
+async function loadChat(id){
+  const {data,error}=await sb.from('messages').select('*').eq('work_id',id).order('created_at',{ascending:true}).limit(300);
+  if(error)return;S.chat={id,rows:data||[]};markSeen(id);renderNav();drawChat(true);
+}
+function drawChat(scroll){
+  const el=$('#dChat');if(!el||!S.chat||S.chat.id!==S.sheet?.id)return;
+  el.innerHTML=S.chat.rows.length?S.chat.rows.map(m=>{const me=m.author===myId();return`<div class="msg ${me?'me':''}"><b>${esc(me?'أنت':nm(m.author))}</b><p>${esc(m.body)}</p><small>${fmtDT(m.created_at)}</small></div>`}).join(''):'<div class="meta" style="padding:8px 4px">ما فيه رسائل بعد. اكتب أول رسالة.</div>';
+  if(scroll)el.scrollTop=el.scrollHeight;
+}
+async function sendMsg(){
+  const i=$('#nmsg');const v=i.value.trim();const id=S.sheet?.id;if(!v||!id)return;i.value='';
+  const {error}=await sb.from('messages').insert({work_id:id,body:v});
+  if(error){toast('تعذر الإرسال');i.value=v;return}
+  loadChat(id);
+}
+function onMsg(p){
+  const m=(p&&p.new)||{};
+  if(S.sheet?.kind==='detail'&&S.sheet.id===m.work_id){loadChat(m.work_id);loadMsgs();return}
+  loadMsgs();
+  if(m.author&&m.author!==myId()){const w=S.works.find(x=>x.id===m.work_id);const t=w?w.title:'عمل';toast('💬 '+nm(m.author)+' كتب في: '+(t.length>28?t.slice(0,28)+'…':t))}
+}
+function chatAlerts(){
+  const rows=S.works.map(w=>[w,unreadOf(w.id)]).filter(x=>x[1].length);
+  return rows.length?`<div class="card alertc chatc">${rows.slice(0,8).map(([w,u])=>`<div class="al" data-open="${esc(w.id)}"><b>💬 ${esc([...new Set(u.map(m=>nm(m.author)))].join('، '))} كتب في العمل (${u.length})</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
+}
+
 /* ---------- العرض ---------- */
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
-  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة']}[S.tab];
+  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar" data-act="account">${esc((S.me?.full_name||'م').trim().charAt(0))}</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&(S.tab!=='ann'||isAdmin())));
 }
 function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>tsMs(a.created_at)>seen).length}
 function renderNav(){
-  const u=S.tab==='ann'?0:unread();
-  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['ann','التعاميم']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}</button>`).join('');
+  const u=S.tab==='ann'?0:unread();const cu=S.works.reduce((n,w)=>n+unreadOf(w.id).length,0);
+  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['ann','التعاميم']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
 }
 function installTip(){
   const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches;
@@ -360,7 +405,7 @@ function wcard(w){
   const p=pctOf(w),s=statusOf(w);let foot;
   if(isFlow(w)){const e=eff(w);foot=`<span><b>${esc(FL[e.stage])}</b></span><span>${esc(dlText(e))}</span>`}
   else{const st=w.steps||[];foot=`<span><b>${p}%</b> · ${st.filter(x=>x.done).length}/${st.length} مراحل</span><span>${w.due?'التسليم '+fmtD(w.due):'بدون موعد'}</span>`}
-  return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta">${foot}</div></div>`;
+  return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}${unreadOf(w.id).length?` <span class="cbadge">💬 ${unreadOf(w.id).length}</span>`:''}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta">${foot}</div></div>`;
 }
 /* تنبيهات الجلسات والمهل */
 function alerts(){
@@ -378,7 +423,7 @@ function vHome(){
   const doneM=all.filter(w=>statusOf(w)==='done'&&doneAt(w)>=ms.getTime()).length;
   const avg=active.length?Math.round(active.reduce((a,w)=>a+pctOf(w),0)/active.length):0;
   let h=`<div class="card"><div class="row" style="align-items:flex-end"><b>متوسط إنجاز الأعمال القائمة</b><span class="big">${avg}%</span></div>${bar(avg,'','gold')}<div class="nums"><div class="num"><b style="color:var(--blue2)">${active.length}</b><span>أعمال قائمة</span></div><div class="num"><b style="color:var(--red)">${late.length}</b><span>متأخرة</span></div><div class="num"><b style="color:var(--green)">${doneM}</b><span>أُنجزت هذا الشهر</span></div></div></div>`;
-  h+=alerts();
+  h+=chatAlerts()+alerts();
   const imp=S.anns.find(a=>a.important)||S.anns[0];
   if(imp)h+=`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`;
   const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t).sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,4);
@@ -412,12 +457,11 @@ function openDetail(id){
   S.sheet={kind:'detail',id};
   openSheet(`<div class="row"><span></span><button class="x" data-act="close">×</button></div><div id="dBody"></div>
   ${fl?'':'<div class="inl"><input class="input" id="nstep" placeholder="أضف مرحلة جديدة" maxlength="80"><button class="sbtn" data-act="addstep">إضافة</button></div>'}
-  <div class="sec"><h2>التحديثات والملاحظات</h2></div>
-  <div class="inl"><textarea class="input" id="nnote" rows="2" placeholder="مثال: تم استلام المستندات من العميل" maxlength="600" style="resize:none"></textarea><button class="sbtn" data-act="addnote">نشر</button></div>
-  <div id="dNotes"></div>
+  <div class="sec"><h2>المحادثة</h2></div><div id="dNotes"></div><div id="dChat" class="chat"></div>
+  <div class="inl"><textarea class="input" id="nmsg" rows="2" placeholder="اكتب رسالة…" maxlength="1000" style="resize:none"></textarea><button class="sbtn" data-act="sendmsg">إرسال</button></div>
   <div class="sec"><h2>سجل النشاط</h2></div><div id="dAct" class="card" style="padding:4px 14px"><div class="meta" style="padding:8px 0">جاري التحميل…</div></div>
   <div class="acts"><button class="btn2" data-act="editwork">تعديل البيانات</button>${isAdmin()?'<button class="btnd" data-act="delwork">حذف</button>':''}</div>`);
-  refreshDetail();loadAct(id);
+  refreshDetail();loadAct(id);S.chat=null;loadChat(id);
 }
 function flowBody(w){
   const e=eff(w),d=w.flow.dates||{},idx=FLOW.findIndex(x=>x[0]===e.base),p=pctOf(w),s=statusOf(w);
@@ -448,7 +492,7 @@ function refreshDetail(){
   b.innerHTML=isFlow(w)?flowBody(w):stepsBody(w);
   if(keep&&$('#adate'))$('#adate').value=keep;
   const n=$('#dNotes');const notes=[...(w.notes||[])].reverse();
-  n.innerHTML=notes.length?notes.map(x=>`<div class="note"><p>${esc(x.text)}</p><small>${esc(nm(x.by))} · ${fmtDT(x.at)}</small></div>`).join(''):'<div class="meta" style="padding:8px 4px">ما فيه تحديثات بعد.</div>';
+  n.innerHTML=notes.length?notes.map(x=>`<div class="note"><p>${esc(x.text)}</p><small>${esc(nm(x.by))} · ${fmtDT(x.at)}</small></div>`).join(''):'';
   drawAct();
 }
 function openWorkForm(id){
@@ -551,6 +595,7 @@ document.addEventListener('click',async e=>{
     case'close':closeSheet();break;
     case'account':openAccount();break;
     case'log':openLog();break;
+    case'sendmsg':sendMsg();break;
     case'logout':closeSheet();await sb.auth.signOut();break;
     case'tipoff':ls('abn_tip_off','1');renderView();break;
     case'fstep':{const i=$('#fstep');const v=i.value.trim();if(v){S.sheet.steps.push(v);i.value='';drawForm()}break}
