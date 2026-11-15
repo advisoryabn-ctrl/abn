@@ -172,6 +172,11 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
 .dwrap{display:flex;gap:8px}.dwrap input{flex:1;min-width:0}
 .dclr{flex:none;padding:0 12px;min-height:38px;border-radius:10px;background:#fff;border:1px solid var(--line);color:var(--red);font-size:13px}
+.tl{display:flex;height:16px;border-radius:9px;overflow:hidden;margin:12px 0 8px;gap:2px}
+.tl i{display:block;min-width:4px}
+.tlr{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.tlr i{flex:none;width:10px;height:10px;border-radius:3px}.tlr span{flex:1}
+.tlr em{font-style:normal;font-size:11px;color:var(--red);font-weight:700}
 </style>
 </head>
 <body>
@@ -434,6 +439,81 @@ async function pushOff(){
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',e=>{const id=e.data&&e.data.open;if(id&&S.loaded&&S.works.some(w=>w.id===id)){S.tab='works';renderAll();openDetail(id)}});
 
+/* ---------- الخط الزمني للقضية ---------- */
+const ML={received:'الاستلام',offer:'إرسال العرض',accepted:'قبول العميل',paid:'الدفع',expert:'تعيين الخبير',report:'التقرير الأولي',objected:'الاعتراض',returned:'إرجاع الشيخ',final:'التقرير النهائي',done:'الاكتمال'};
+const MK=Object.keys(ML);
+const RULE={'offer>accepted':d=>addWork(d,5),'accepted>paid':d=>addWork(d,10),'paid>expert':d=>addWork(d,10),'expert>report':d=>addDays(d,30),'objected>final':d=>addWork(d,10),'returned>final':d=>addWork(d,10)};
+const TLPAL=['#13406F','#1F5E9E','#4C86C6','#7FA9D8','#5B7A99','#2E6F9E','#0B2545'];
+function timeline(w){
+  const d={...(w.flow.dates||{}),received:w.received},e=eff(w);
+  const ms=MK.filter(k=>d[k]).map(k=>({k,d:d[k]})).sort((a,b)=>a.d.localeCompare(b.d)||MK.indexOf(a.k)-MK.indexOf(b.k));
+  const segs=[];
+  for(let i=1;i<ms.length;i++){const a=ms[i-1],b=ms[i],r=RULE[a.k+'>'+b.k];segs.push({l:ML[a.k]+' ← '+ML[b.k],n:dayDiff(a.d,b.d),late:r?Math.max(0,dayDiff(r(a.d),b.d)):0})}
+  const open=e.stage!=='done'&&e.stage!=='rejected';
+  if(ms.length&&open){const a=ms[ms.length-1],t=todayISO();if(t>=a.d)segs.push({l:FL[e.base]+' (جارية)',n:dayDiff(a.d,t),late:e.dl?Math.max(0,dayDiff(e.dl,t)):0,now:true})}
+  if(!segs.length)return'';
+  const tot=segs.reduce((s,x)=>s+x.n,0);
+  const col=(x,i)=>x.late?'var(--red)':x.now?'var(--gold)':TLPAL[i%TLPAL.length];
+  return`<div class="card"><div class="row"><b>الخط الزمني</b><span class="meta">المدة الكلية: <b>${tot}</b> يوم</span></div>
+  <div class="tl">${segs.map((x,i)=>`<i style="flex:${Math.max(x.n,tot*0.04)||1};background:${col(x,i)}"></i>`).join('')}</div>
+  ${segs.map((x,i)=>`<div class="tlr"><i style="background:${col(x,i)}"></i><span>${esc(x.l)}</span>${x.late?`<em>تأخر ${x.late} يوم</em>`:''}<b>${x.n} يوم</b></div>`).join('')}
+  <div class="meta" style="margin-top:6px">من ${fmtD(ms[0].d)} إلى ${open?'اليوم':fmtD(ms[ms.length-1].d)}</div></div>`;
+}
+
+/* ---------- حاسبة التسعير (تجريبي) ---------- */
+const PRICE0={case:0,report:0,fs:0,tax:0,med:1.4,big:2,cx:1.3,urg:1.2,party:10,year:8};
+const PLBL={case:'أساس القضية المحاسبية (ريال)',report:'أساس التقرير (ريال)',fs:'أساس مراجعة القوائم لكل سنة (ريال)',tax:'أساس الإقرار الضريبي الواحد (ريال)',med:'معامل حجم المستندات: متوسط',big:'معامل حجم المستندات: كبير',cx:'معامل العمل المعقّد',urg:'معامل الاستعجال',party:'زيادة لكل طرف إضافي بعد اثنين (%)',year:'زيادة لكل سنة مالية إضافية في القضية (%)'};
+const priceCfg=()=>({...PRICE0,...(S.tpl.pricing&&!Array.isArray(S.tpl.pricing)?S.tpl.pricing:{})});
+const nf=n=>Math.round(n).toLocaleString('en-US');
+function calcPrice(f,c){
+  const sz=f.size==='b'?c.big:f.size==='m'?c.med:1;let p;
+  if(f.type==='case')p=c.case*sz*(1+c.party/100*Math.max(0,f.parties-2))*(1+c.year/100*Math.max(0,f.years-1));
+  else if(f.type==='report')p=c.report*sz;
+  else if(f.type==='fs')p=c.fs*Math.max(1,f.years)*sz;
+  else p=c.tax*Math.max(1,f.count);
+  if(f.cx&&f.type!=='tax')p*=c.cx;
+  if(f.urg)p*=c.urg;
+  return p;
+}
+function openCalc(){
+  S.sheet={kind:'calc',type:'case',size:'s',parties:2,years:1,count:1,cx:false,urg:false,edit:false};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">حاسبة التسعير <span class="pill tag">تجريبي</span></h2><button class="x" data-act="close">×</button></div><div id="cBody"></div>`);
+  drawCalc();
+}
+function drawCalc(){
+  const f=S.sheet,c=priceCfg(),el=$('#cBody');if(!el)return;
+  if(f.edit){
+    el.innerHTML=`<div class="notice">هذي الأرقام اللي تبني عليها الحاسبة. عدّلها حسب أسعار المكتب، وتنحفظ للكل.</div><div class="card" style="padding:4px 14px">${Object.keys(PLBL).map(k=>`<div class="drow"><label>${PLBL[k]}</label><input type="number" inputmode="decimal" step="any" min="0" data-cfg="${k}" value="${c[k]}"></div>`).join('')}</div><button class="primary" data-act="calcsave">حفظ</button><button class="abtn alt" data-act="calcedit">رجوع للحاسبة</button>`;
+    return;
+  }
+  const chip=(on,attr,l)=>`<button class="chip ${on?'on':''}" ${attr}>${l}</button>`;
+  const num=(k,l,min)=>`<div class="drow"><label>${l}</label><input type="number" inputmode="numeric" min="${min}" step="1" data-cnum="${k}" value="${f[k]}"></div>`;
+  let h=`<label class="lbl">نوع العمل</label><div class="wrap">${['case','report','fs','tax'].map(k=>chip(f.type===k,`data-ctype="${k}"`,TYPES[k].label)).join('')}</div>`;
+  if(f.type!=='tax')h+=`<label class="lbl">حجم المستندات</label><div class="wrap">${[['s','صغير'],['m','متوسط'],['b','كبير']].map(([k,l])=>chip(f.size===k,`data-csize="${k}"`,l)).join('')}</div>`;
+  let nums='';
+  if(f.type==='case')nums+=num('parties','عدد الأطراف',2)+num('years','عدد السنوات المالية محل النزاع',1);
+  if(f.type==='fs')nums+=num('years','عدد السنوات المالية',1);
+  if(f.type==='tax')nums+=num('count','عدد الإقرارات',1);
+  if(nums)h+=`<div class="card" style="padding:4px 14px">${nums}</div>`;
+  h+=`<div class="wrap">${f.type!=='tax'?chip(f.cx,'data-ctog="cx"','عمل معقّد'):''}${chip(f.urg,'data-ctog="urg"','مستعجل')}</div><div id="cRes"></div>
+  <div class="meta" style="line-height:1.7;margin-bottom:12px">تقدير أولي للاستئناس فقط. مبني على أسعار أساس ومعاملات تحددونها أنتم، وليس على تحليل للأعمال السابقة.</div>
+  ${isAdmin()?'<button class="abtn alt" data-act="calcedit">تعديل أسعار الأساس والمعاملات</button>':''}`;
+  el.innerHTML=h;drawRes();
+}
+function drawRes(){
+  const el=$('#cRes');if(!el)return;const f=S.sheet,c=priceCfg();
+  if(!c[f.type]){el.innerHTML='<div class="notice">ما تم تحديد سعر أساس لهذا النوع بعد.</div>';return}
+  const p=Math.round(calcPrice(f,c)/50)*50;
+  el.innerHTML=`<div class="card goldEdge"><div class="meta">السعر المقترح (قبل الضريبة)</div><div class="big">${nf(p)} <span style="font-size:14px">ريال</span></div><div class="meta" style="margin-top:6px">النطاق المعقول: ${nf(p*0.9)} – ${nf(p*1.15)} ريال</div><div class="meta">شامل ضريبة القيمة المضافة 15%: <b>${nf(p*1.15)}</b> ريال</div></div>`;
+}
+async function calcSave(){
+  const cfg={...priceCfg()};
+  document.querySelectorAll('[data-cfg]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v)&&v>=0)cfg[i.dataset.cfg]=v});
+  const {error}=await sb.from('templates').upsert({type:'pricing',steps:cfg,updated_at:new Date().toISOString()});
+  if(error){toast('تعذر الحفظ');return}
+  S.tpl.pricing=cfg;S.sheet.edit=false;toast('تم حفظ الأسعار');drawCalc();
+}
+
 /* ---------- العرض ---------- */
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
@@ -536,6 +616,7 @@ function flowBody(w){
   <div class="meta">${esc(dlText(e))}${open&&e.dl?' · آخر موعد '+fmtD(e.dl):''}${e.stage==='rejected'&&w.flow.reason?' · '+esc(w.flow.reason):''}</div>
   <ul class="track">${track}</ul>
   <div class="fld" style="margin-top:10px"><label class="lbl">تاريخ الإجراء</label><input type="date" id="adate" class="input" value="${todayISO()}"></div>${acts}</div>
+  ${timeline(w)}
   <div class="card" style="margin:0"><b>تواريخ المراحل</b><div class="meta" style="margin:2px 0 6px">تقدر تعدّل أي تاريخ أو تعبّي الناقص، والمهل تنحسب تلقائيًا.</div>${dates}</div>`;
 }
 function stepsBody(w){
@@ -611,6 +692,7 @@ function openAccount(){
   S.sheet={kind:'acc'};
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">${esc(S.me?.full_name||'حسابي')}</h2><button class="x" data-act="close">×</button></div>
   <div class="card"><div class="meta">البريد الإلكتروني</div><b dir="ltr" style="display:block;text-align:right">${esc(S.session?.user?.email)}</b><div class="meta" style="margin-top:10px">الصلاحية</div><b>${isAdmin()?'مدير':'موظف'}</b></div>
+  <button class="primary" style="margin-bottom:10px;background:var(--gold);color:var(--navy)" data-act="calc">🧮 حاسبة التسعير (تجريبي)</button>
   <button class="primary" style="margin-bottom:10px;background:var(--blue2)" data-act="push">🔔 الإشعارات على هذا الجهاز</button>
   ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">قوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
   <button class="primary" style="background:var(--red)" data-act="logout">تسجيل الخروج</button>`);
@@ -627,8 +709,11 @@ async function openLog(){
 let armT=null;
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog]');if(!t)return;
   const d=t.dataset;
+  if(d.ctype){S.sheet.type=d.ctype;drawCalc();return}
+  if(d.csize){S.sheet.size=d.csize;drawCalc();return}
+  if(d.ctog){S.sheet[d.ctog]=!S.sheet[d.ctog];drawCalc();return}
   if(d.tpltype){S.sheet.type=d.tpltype;S.sheet.steps=[...stepsFor(d.tpltype)];drawTpl();return}
   if(d.tplrm!==undefined){S.sheet.steps.splice(+d.tplrm,1);drawTpl();return}
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
@@ -662,6 +747,9 @@ document.addEventListener('click',async e=>{
     case'log':openLog();break;
     case'sendmsg':sendMsg();break;
     case'push':openPush();break;
+    case'calc':openCalc();break;
+    case'calcedit':S.sheet.edit=!S.sheet.edit;drawCalc();break;
+    case'calcsave':calcSave();break;
     case'pushon':pushOn();break;
     case'pushoff':pushOff();break;
     case'tpl':openTpl();break;
@@ -684,7 +772,7 @@ document.addEventListener('change',e=>{
   const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};if(v)f.dates[k]=v;else delete f.dates[k];
   updateWork(w.id,{flow:f});
 });
-document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}});
+document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}const k=e.target.dataset?.cnum;if(k&&S.sheet?.kind==='calc'){const v=parseInt(e.target.value,10);S.sheet[k]=isNaN(v)?1:Math.max(1,Math.min(99,v));drawRes()}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='nstep'||e.target.id==='fstep')){e.preventDefault();document.querySelector(e.target.id==='nstep'?'[data-act=addstep]':'[data-act=fstep]').click()}});
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet()});
 $('#fab').addEventListener('click',()=>{S.tab==='ann'?openAnnForm():openWorkForm()});
