@@ -460,6 +460,54 @@ function timeline(w){
   <div class="meta" style="margin-top:6px">من ${fmtD(ms[0].d)} إلى ${open?'اليوم':fmtD(ms[ms.length-1].d)}</div></div>`;
 }
 
+/* ---------- النسخة الاحتياطية ---------- */
+const BKKEY='abn_bk';
+const bkLast=()=>{try{return +localStorage.getItem(BKKEY)||0}catch(e){return 0}};
+const bkDue=()=>isAdmin()&&S.works.length>0&&Date.now()-bkLast()>7*864e5;
+function bkNote(){return bkDue()?`<div class="card goldEdge" data-act="backup" style="cursor:pointer"><b>💾 النسخة الاحتياطية الأسبوعية</b><div class="meta" style="margin-top:4px;line-height:1.7">${bkLast()?'مر أكثر من أسبوع على آخر نسخة نزّلتها على هذا الجهاز.':'ما نزّلت نسخة احتياطية على هذا الجهاز بعد.'} اضغط هنا لتنزيل ملف Excel.</div></div>`:''}
+function loadXLSX(){return window.XLSX?Promise.resolve():new Promise((ok,no)=>{const x=document.createElement('script');x.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';x.onload=ok;x.onerror=no;document.head.appendChild(x)})}
+async function allRows(t,ord){let out=[],i=0;for(;;){const {data,error}=await sb.from(t).select('*').order(ord,{ascending:true}).range(i,i+999);if(error)throw error;out=out.concat(data||[]);if(!data||data.length<1000)break;i+=1000}return out}
+let BK=null,bkBusy=false;
+async function backup(){
+  if(bkBusy)return;bkBusy=true;BK=null;
+  S.sheet={kind:'bk'};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">النسخة الاحتياطية</h2><button class="x" data-act="close">×</button></div><div id="bkBody"><div class="notice">جاري تجهيز النسخة…</div></div>`);
+  try{
+    await loadXLSX();
+    const [works,msgs,anns,act,profs,tpls]=await Promise.all([allRows('works','created_at'),allRows('messages','created_at'),allRows('announcements','created_at'),allRows('activity','created_at'),allRows('profiles','created_at'),allRows('templates','type')]);
+    const nm=id=>(profs.find(p=>p.id===id)||{}).full_name||'';
+    const wk=id=>works.find(w=>w.id===id)||{};
+    const dt=v=>{if(!v)return'';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleString('sv-SE',{timeZone:'Asia/Riyadh'}).slice(0,16)};
+    const STT={new:'جديد',prog:'جاري',late:'متأخر',done:'منجز',rej:'مرفوض'};
+    const W=works.map(w=>{const fl=isFlow(w),st=Array.isArray(w.steps)?w.steps:[];const r={'الرمز':w.code||'','النوع':(TYPES[w.type]||{}).label||w.type,'العنوان':w.title||'','العميل':w.client||'','المرجع':w.ref||'','الحالة':STT[statusOf(w)]||'','المرحلة':fl?FL[eff(w).stage]||'':st.length?st.filter(x=>x.done).length+' من '+st.length:'','موعد التسليم':w.due||'','الجلسة':w.hearing||''};
+      FDATES.forEach(([k,l])=>{r[l]=(w.flow&&w.flow.dates&&w.flow.dates[k])||(k==='received'?w.received||'':'')});
+      r['سبب الرفض']=(w.flow&&w.flow.reason)||'';r['تاريخ الإنجاز']=w.completed_at?String(w.completed_at).slice(0,10):'';r['أضافه']=nm(w.created_by);r['تاريخ الإضافة']=dt(w.created_at);r['flow']=w.flow?JSON.stringify(w.flow):'';r['steps']=st.length?JSON.stringify(st):'';r['id']=w.id;return r});
+    const ST=[],N=[];
+    works.forEach(w=>{(Array.isArray(w.steps)?w.steps:[]).forEach((x,i)=>ST.push({'الرمز':w.code||'','العمل':w.title||'','الترتيب':i+1,'المرحلة':x.t||'','منجزة':x.done?'نعم':'لا','تاريخ الإنجاز':dt(x.at)}));
+      (Array.isArray(w.notes)?w.notes:[]).forEach(x=>N.push({'الرمز':w.code||'','العمل':w.title||'','الملاحظة':x.text||'','الكاتب':nm(x.by),'التاريخ':dt(x.at)}))});
+    const M=msgs.map(m=>({'الرمز':wk(m.work_id).code||'','العمل':wk(m.work_id).title||'','الكاتب':nm(m.author),'الرسالة':m.body||'','التاريخ':dt(m.created_at)}));
+    const A=anns.map(a=>({'العنوان':a.title||'','النص':a.body||'','مهم':a.important?'نعم':'لا','الكاتب':nm(a.created_by),'التاريخ':dt(a.created_at)}));
+    const L=act.map(a=>({'التاريخ':dt(a.created_at),'الموظف':nm(a.actor),'الإجراء':a.action||'','العمل':a.work_title||''}));
+    const P=profs.map(p=>({'الاسم':p.full_name||'','المسمى':p.title||'','الصلاحية':p.role==='admin'?'مدير':'موظف'}));
+    const T=tpls.map(t=>({'النوع':t.type,'المحتوى':JSON.stringify(t.steps)}));
+    const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
+    const add=(name,rows)=>{const ws=rows.length?XLSX.utils.json_to_sheet(rows):XLSX.utils.aoa_to_sheet([['لا توجد بيانات']]);if(rows.length)ws['!cols']=Object.keys(rows[0]).map(k=>({wch:Math.min(45,Math.max(k.length+2,...rows.slice(0,200).map(r=>String(r[k]==null?'':r[k]).length+2)))}));XLSX.utils.book_append_sheet(wb,ws,name)};
+    add('الأعمال',W);add('مراحل الأعمال',ST);add('الملاحظات',N);add('المحادثات',M);add('التعاميم',A);add('سجل النشاط',L);add('الموظفون',P);add('القوالب والتسعير',T);
+    const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    BK={name:'ABN-backup-'+todayISO()+'.xlsx',blob:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})};
+    const el=$('#bkBody');
+    if(el)el.innerHTML=`<div class="card"><b>النسخة جاهزة</b><div class="meta" style="margin-top:6px;line-height:1.9">الأعمال: <b>${works.length}</b> · الرسائل: <b>${msgs.length}</b> · التعاميم: <b>${anns.length}</b> · سجل النشاط: <b>${act.length}</b><br>الملف: <span dir="ltr">${BK.name}</span></div></div><button class="primary" data-act="bksave">حفظ الملف</button><div class="meta" style="line-height:1.7;margin-top:12px">احفظ الملف في مكان آمن خارج الجوال (مثل الإيميل أو iCloud). الملف فيه كل بيانات المكتب، فلا تشاركه مع أحد من برا.</div>`;
+  }catch(e){const el=$('#bkBody');if(el)el.innerHTML='<div class="notice">تعذر تجهيز النسخة. تأكد من الاتصال بالإنترنت وحاول مرة ثانية.</div>'}
+  bkBusy=false;
+}
+async function bkSave(){
+  if(!BK)return;
+  const done=()=>{try{localStorage.setItem(BKKEY,String(Date.now()))}catch(e){}toast('تم حفظ النسخة الاحتياطية')};
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
+  if(ios&&navigator.canShare){try{const f=new File([BK.blob],BK.name,{type:BK.blob.type});if(navigator.canShare({files:[f]})){await navigator.share({files:[f]});done();return}}catch(e){if(e&&e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(BK.blob);a.download=BK.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);done();
+}
+
 /* ---------- حاسبة التسعير (تجريبي) ---------- */
 const PRICE0={case:0,report:0,fs:0,tax:0,med:1.4,big:2,cx:1.3,urg:1.2,party:10,year:8};
 const PLBL={case:'أساس القضية المحاسبية (ريال)',report:'أساس التقرير (ريال)',fs:'أساس مراجعة القوائم لكل سنة (ريال)',tax:'أساس الإقرار الضريبي الواحد (ريال)',med:'معامل حجم المستندات: متوسط',big:'معامل حجم المستندات: كبير',cx:'معامل العمل المعقّد',urg:'معامل الاستعجال',party:'زيادة لكل طرف إضافي بعد اثنين (%)',year:'زيادة لكل سنة مالية إضافية في القضية (%)'};
@@ -571,7 +619,7 @@ function vHome(){
   const doneM=all.filter(w=>statusOf(w)==='done'&&doneAt(w)>=ms.getTime()).length;
   const avg=active.length?Math.round(active.reduce((a,w)=>a+pctOf(w),0)/active.length):0;
   let h=`<div class="card"><div class="row" style="align-items:flex-end"><b>متوسط إنجاز الأعمال القائمة</b><span class="big">${avg}%</span></div>${bar(avg,'','gold')}<div class="nums"><div class="num"><b style="color:var(--blue2)">${active.length}</b><span>أعمال قائمة</span></div><div class="num"><b style="color:var(--red)">${late.length}</b><span>متأخرة</span></div><div class="num"><b style="color:var(--green)">${doneM}</b><span>أُنجزت هذا الشهر</span></div></div></div>`;
-  h+=chatAlerts()+alerts();
+  h+=chatAlerts()+alerts()+bkNote();
   const imp=S.anns.find(a=>a.important)||S.anns[0];
   if(imp)h+=`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`;
   const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t).sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,4);
@@ -702,6 +750,7 @@ function openAccount(){
   <div class="card"><div class="meta">البريد الإلكتروني</div><b dir="ltr" style="display:block;text-align:right">${esc(S.session?.user?.email)}</b><div class="meta" style="margin-top:10px">الصلاحية</div><b>${isAdmin()?'مدير':'موظف'}</b></div>
   <button class="primary" style="margin-bottom:10px;background:var(--gold);color:var(--navy)" data-act="calc">🧮 حاسبة التسعير (تجريبي)</button>
   <button class="primary" style="margin-bottom:10px;background:var(--blue2)" data-act="push">🔔 الإشعارات على هذا الجهاز</button>
+  ${isAdmin()?'<button class="primary" style="margin-bottom:10px;background:var(--green)" data-act="backup">💾 نسخة احتياطية (Excel)</button>':''}
   ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">قوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
   <button class="primary" style="background:var(--red)" data-act="logout">تسجيل الخروج</button>`);
 }
@@ -754,6 +803,8 @@ document.addEventListener('click',async e=>{
     case'account':openAccount();break;
     case'log':openLog();break;
     case'sendmsg':sendMsg();break;
+    case'backup':backup();break;
+    case'bksave':bkSave();break;
     case'push':openPush();break;
     case'calc':openCalc();break;
     case'calcedit':calcEdit();break;
