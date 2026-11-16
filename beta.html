@@ -168,6 +168,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .msg b{font-size:11.5px;color:var(--blue2);display:block}.msg.me b{color:var(--gold2)}
 .msg p{line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .men{color:var(--blue2);font-weight:700}.msg.me .men{color:var(--gold2)}.men.mine{background:var(--gold);color:var(--navy);border-radius:6px;padding:0 4px}
+.rd{display:block;font-size:10.5px;margin-top:3px;color:var(--mute)}.msg.me .rd{color:#B8C7DD}.rd.on{color:var(--green);font-weight:600}.msg.me .rd.on{color:var(--gold2)}
 .msg small{font-size:10.5px;color:var(--mute)}.msg.me small{color:#B8C7DD}
 .cbadge{font-size:11px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap}
 .chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
@@ -326,7 +327,7 @@ function startApp(){
   $('#login').classList.add('hidden');['#app','#tabs'].forEach(s=>$(s).classList.remove('hidden'));
   S.loaded=false;renderAll();load();pushSync();
   if(channel)sb.removeChannel(channel);
-  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).subscribe();
+  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).on('postgres_changes',{event:'*',schema:'public',table:'msg_reads'},onRead).subscribe();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.session)load()});
 
@@ -352,7 +353,7 @@ function drawAct(){
 function seenMap(){try{return JSON.parse(ls('abn_chat_seen')||'{}')||{}}catch(e){return{}}}
 function chatBase(){let b=+(ls('abn_chat_base')||0);if(!b){b=Date.now();ls('abn_chat_base',String(b))}return b}
 function unreadOf(id){const s=Math.max(seenMap()[id]||0,chatBase());return S.msgs.filter(m=>m.work_id===id&&m.author!==myId()&&tsMs(m.created_at)>s)}
-function markSeen(id){const m=seenMap();m[id]=Date.now();ls('abn_chat_seen',JSON.stringify(m))}
+function markSeen(id){const m=seenMap();m[id]=Date.now();ls('abn_chat_seen',JSON.stringify(m));markRead(id)}
 async function loadMsgs(){
   const {data,error}=await sb.from('messages').select('id,work_id,author,created_at,body').order('created_at',{ascending:false}).limit(500);
   if(error)return;S.msgs=data||[];
@@ -361,11 +362,11 @@ async function loadMsgs(){
 }
 async function loadChat(id){
   const {data,error}=await sb.from('messages').select('*').eq('work_id',id).order('created_at',{ascending:true}).limit(300);
-  if(error)return;S.chat={id,rows:data||[]};markSeen(id);renderNav();drawChat(true);
+  if(error)return;S.chat={id,rows:data||[],reads:S.chat&&S.chat.id===id?S.chat.reads:null};markSeen(id);renderNav();drawChat(true);loadReads(id);
 }
 function drawChat(scroll){
   const el=$('#dChat');if(!el||!S.chat||S.chat.id!==S.sheet?.id)return;
-  el.innerHTML=S.chat.rows.length?S.chat.rows.map(m=>{const me=m.author===myId();return`<div class="msg ${me?'me':''}"><b>${esc(me?'أنت':nm(m.author))}</b><p>${menHtml(m.body)}</p><small>${fmtDT(m.created_at)}</small></div>`}).join(''):'<div class="meta" style="padding:8px 4px">ما فيه رسائل بعد. اكتب أول رسالة.</div>';
+  el.innerHTML=S.chat.rows.length?S.chat.rows.map(m=>{const me=m.author===myId();return`<div class="msg ${me?'me':''}"><b>${esc(me?'أنت':nm(m.author))}</b><p>${menHtml(m.body)}</p><small>${fmtDT(m.created_at)}</small>${readLine(m)}</div>`}).join(''):'<div class="meta" style="padding:8px 4px">ما فيه رسائل بعد. اكتب أول رسالة.</div>';
   if(scroll)el.scrollTop=el.scrollHeight;
 }
 async function sendMsg(){
@@ -385,6 +386,21 @@ function chatAlerts(){
   return rows.length?`<div class="card alertc chatc">${rows.slice(0,8).map(([w,u])=>`<div class="al" data-open="${esc(w.id)}"><b>${u.some(m=>menMe(m.body))?'📣 ذكرك ':'💬 '}${esc([...new Set(u.map(m=>nm(m.author)))].join('، '))}${u.some(m=>menMe(m.body))?' في العمل':' كتب في العمل'} (${u.length})</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
 }
 
+/* ---------- من قرأ الرسالة ---------- */
+const mrT={};
+function markRead(id){if(!id||mrT[id])return;mrT[id]=setTimeout(()=>{delete mrT[id];sb.rpc('mark_read',{p_work:id}).then(()=>{},()=>{})},600)}
+async function loadReads(id){
+  const {data,error}=await sb.from('msg_reads').select('user_id,seen_at').eq('work_id',id);
+  if(error||!S.chat||S.chat.id!==id)return;S.chat.reads=data||[];drawChat(false);
+}
+function onRead(p){const r=(p&&p.new)||{};if(r.work_id&&r.user_id!==myId()&&S.sheet?.kind==='detail'&&S.sheet.id===r.work_id)loadReads(r.work_id)}
+function readLine(m){
+  const rs=S.chat&&S.chat.reads;if(!rs)return'';
+  const t=tsMs(m.created_at),mine=m.author===myId();
+  const names=rs.filter(r=>r.user_id!==m.author&&r.user_id!==myId()&&tsMs(r.seen_at)>=t).map(r=>first(S.profiles.find(p=>p.id===r.user_id)?.full_name)).filter(Boolean);
+  if(names.length)return`<span class="rd on">✓✓ قرأها: ${esc(names.join('، '))}</span>`;
+  return mine?'<span class="rd">✓ لم تُقرأ بعد</span>':'';
+}
 /* ---------- المنشن ---------- */
 const first=n=>String(n||'').trim().split(/\s+/)[0]||'';
 const menMe=b=>{const f=first(S.me?.full_name);return !!f&&String(b||'').includes('@'+f)};
@@ -775,7 +791,35 @@ function openAccount(){
   <button class="primary" style="margin-bottom:10px;background:var(--blue2)" data-act="push">🔔 الإشعارات على هذا الجهاز</button>
   ${isAdmin()?'<button class="primary" style="margin-bottom:10px;background:var(--green)" data-act="backup">💾 نسخة احتياطية (Excel)</button>':''}
   ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">قوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
+  <button class="primary" style="margin-bottom:10px;background:#fff;color:var(--navy);border:1.5px solid var(--line)" data-act="pass">🔑 تغيير كلمة المرور</button>
   <button class="primary" style="background:var(--red)" data-act="logout">تسجيل الخروج</button>`);
+}
+/* ---------- تغيير كلمة المرور ---------- */
+function openPass(){
+  S.sheet={kind:'pass'};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">تغيير كلمة المرور</h2><button class="x" data-act="close">×</button></div>
+  <form class="f" id="pf">
+   <div class="fld"><label class="lbl">كلمة المرور الحالية</label><input name="cur" type="password" autocomplete="current-password" dir="ltr" required></div>
+   <div class="fld"><label class="lbl">كلمة المرور الجديدة</label><input name="n1" type="password" autocomplete="new-password" dir="ltr" required minlength="8"></div>
+   <div class="fld"><label class="lbl">تأكيد كلمة المرور الجديدة</label><input name="n2" type="password" autocomplete="new-password" dir="ltr" required minlength="8"></div>
+   <div class="meta" style="line-height:1.7;margin-bottom:12px">8 خانات على الأقل. بعد التغيير تبقى داخل التطبيق على هذا الجهاز، وتستخدم الكلمة الجديدة في أي دخول قادم.</div>
+   <button class="primary" type="submit">حفظ كلمة المرور</button>
+  </form>`);
+  $('#pf').addEventListener('submit',async e=>{
+    e.preventDefault();const f=new FormData(e.target),b=e.target.querySelector('.primary');
+    const cur=String(f.get('cur')||''),n1=String(f.get('n1')||''),n2=String(f.get('n2')||'');
+    if(n1.length<8){toast('كلمة المرور الجديدة أقل من 8 خانات');return}
+    if(n1!==n2){toast('كلمتا المرور الجديدتان غير متطابقتين');return}
+    if(n1===cur){toast('الكلمة الجديدة نفس الحالية');return}
+    const back=()=>{b.disabled=false;b.textContent='حفظ كلمة المرور'};
+    const net=er=>!er.status||/fetch|network/i.test(er.message||'');
+    b.disabled=true;b.textContent='جاري الحفظ…';
+    const r=await sb.auth.signInWithPassword({email:S.session?.user?.email,password:cur});
+    if(r.error){back();toast(net(r.error)?'تعذر الاتصال، تأكد من الإنترنت':'كلمة المرور الحالية غير صحيحة');return}
+    const u=await sb.auth.updateUser({password:n1});
+    if(u.error){back();toast(net(u.error)?'تعذر الاتصال، تأكد من الإنترنت':/weak|short|least|character/i.test(u.error.message||'')?'كلمة المرور ضعيفة، اختر كلمة أقوى':'تعذر تغيير كلمة المرور');return}
+    toast('تم تغيير كلمة المرور');closeSheet();
+  });
 }
 async function openLog(){
   S.sheet={kind:'log'};
@@ -829,6 +873,7 @@ document.addEventListener('click',async e=>{
     case'close':closeSheet();break;
     case'account':openAccount();break;
     case'log':openLog();break;
+    case'pass':openPass();break;
     case'sendmsg':sendMsg();break;
     case'backup':backup();break;
     case'bksave':bkSave();break;
