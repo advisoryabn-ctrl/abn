@@ -409,23 +409,50 @@ function menHtml(b){let h=esc(b);S.profiles.forEach(p=>{const f=first(p.full_nam
 function menAdd(n){const i=$('#nmsg');if(!i)return;const a=i.selectionStart??i.value.length,v=i.value,pre=v.slice(0,a),t=(pre&&!/\s$/.test(pre)?' ':'')+'@'+n+' ';i.value=pre+t+v.slice(a);i.focus();const c=pre.length+t.length;try{i.setSelectionRange(c,c)}catch(e){}}
 /* ---------- قوالب المراحل ---------- */
 const stepsFor=t=>(S.tpl[t]&&S.tpl[t].length?S.tpl[t]:TYPES[t].steps);
-async function loadTpl(){const {data,error}=await sb.from('templates').select('*');if(error)return;S.tpl=Object.fromEntries((data||[]).map(r=>[r.type,r.steps||[]]))}
+async function loadTpl(){const {data,error}=await sb.from('templates').select('*');if(error)return;S.tpl=Object.fromEntries((data||[]).map(r=>[r.type,r.steps||[]]));syncTypes()}
+const BUILTIN=['case','fs','report','tax','other'];
+function customTypes(){const c=S.tpl.custom_types;return Array.isArray(c)?c.filter(x=>x&&x.k&&x.label):[]}
+function syncTypes(){
+  Object.keys(TYPES).forEach(k=>{if(!BUILTIN.includes(k))delete TYPES[k]});
+  customTypes().forEach(c=>{TYPES[c.k]={label:c.label,steps:Array.isArray(c.steps)?c.steps:[],custom:true}});
+  if(S.loaded&&!S.sheet)renderView();
+}
+async function saveCustom(list){
+  const {error}=await sb.from('templates').upsert({type:'custom_types',steps:list,updated_at:new Date().toISOString()});
+  if(error){toast('تعذر الحفظ');return false}
+  S.tpl.custom_types=list;syncTypes();return true;
+}
 function openTpl(){
-  S.sheet={kind:'tpl',type:'report',steps:[...stepsFor('report')]};
-  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">قوالب المراحل</h2><button class="x" data-act="close">×</button></div>
-  <div class="notice">اختر نوع العمل وعدّل مراحله ثم اضغط <b>حفظ القالب</b>. التعديل يطبّق على الأعمال الجديدة فقط، والأعمال الحالية تبقى بمراحلها. (القضايا المحاسبية لها مسار ثابت.)</div>
-  <div class="wrap" id="ttypes"></div><div id="tsteps" class="card" style="padding:4px 14px"></div>
+  S.sheet={kind:'tpl',type:'report',label:'',steps:[...stepsFor('report')]};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">أنواع الأعمال وقوالب المراحل</h2><button class="x" data-act="close">×</button></div>
+  <div class="notice">اختر نوع العمل وعدّل مراحله ثم اضغط <b>حفظ</b>، أو اضغط <b>＋ نوع جديد</b> لإضافة نوع عمل. التعديل يطبّق على الأعمال الجديدة فقط، والأعمال الحالية تبقى بمراحلها. (القضايا المحاسبية لها مسار ثابت.)</div>
+  <div class="wrap" id="ttypes"></div><div id="tname"></div><div id="tsteps" class="card" style="padding:4px 14px"></div>
   <div class="inl" style="margin:0 0 16px"><input class="input" id="tplstep" placeholder="أضف مرحلة" maxlength="80"><button class="sbtn" data-act="tpladd">إضافة</button></div>
-  <button class="primary" data-act="tplsave">حفظ القالب</button>`);
+  <button class="primary" data-act="tplsave">حفظ</button><div id="tdel"></div>`);
   drawTpl();
 }
 function drawTpl(){
-  const f=S.sheet;
-  $('#ttypes').innerHTML=['report','fs','tax','other'].map(k=>`<button class="chip ${f.type===k?'on':''}" data-tpltype="${k}">${TYPES[k].label}</button>`).join('');
-  $('#tsteps').innerHTML=f.steps.length?f.steps.map((s,i)=>`<div class="drow"><label>${i+1}. ${esc(s)}</label>${i?`<button class="dclr" style="color:var(--navy)" data-tplup="${i}">↑</button>`:''}<button class="dclr" data-tplrm="${i}">حذف</button></div>`).join(''):'<div class="meta" style="padding:8px 0">ما فيه مراحل.</div>';
+  const f=S.sheet,isNew=f.type==='__new',cus=isNew||!!(TYPES[f.type]&&TYPES[f.type].custom);
+  $('#ttypes').innerHTML=['report','fs','tax','other'].concat(customTypes().map(c=>c.k)).map(k=>`<button class="chip ${f.type===k?'on':''}" data-tpltype="${esc(k)}">${esc(TYPES[k].label)}</button>`).join('')+`<button class="chip ${isNew?'on':''}" data-tpltype="__new">＋ نوع جديد</button>`;
+  $('#tname').innerHTML=cus?`<div class="fld"><label class="lbl">اسم نوع العمل</label><input class="input" id="tlabel" maxlength="40" value="${esc(f.label)}" placeholder="مثال: دراسة جدوى"></div>`:'';
+  $('#tsteps').innerHTML=f.steps.length?f.steps.map((s,i)=>`<div class="drow"><label>${i+1}. ${esc(s)}</label>${i?`<button class="dclr" style="color:var(--navy)" data-tplup="${i}">↑</button>`:''}<button class="dclr" data-tplrm="${i}">حذف</button></div>`).join(''):'<div class="meta" style="padding:8px 0">ما فيه مراحل. أضف المراحل من الخانة تحت.</div>';
+  $('#tdel').innerHTML=cus&&!isNew?'<button class="abtn no" style="margin-top:10px" data-act="tpldel">حذف هذا النوع</button>':'';
 }
 async function tplSave(){
-  const f=S.sheet;if(!f.steps.length){toast('أضف مرحلة واحدة على الأقل');return}
+  const f=S.sheet,isNew=f.type==='__new',cus=isNew||!!(TYPES[f.type]&&TYPES[f.type].custom);
+  if(cus){
+    const label=(f.label||'').trim();
+    if(!label){toast('اكتب اسم نوع العمل');return}
+    if(Object.entries(TYPES).some(([k,v])=>k!==f.type&&v.label===label)){toast('فيه نوع عمل بنفس الاسم');return}
+    if(!f.steps.length){toast('أضف مرحلة واحدة على الأقل');return}
+    const list=customTypes().map(x=>({...x}));
+    if(isNew&&list.length>=20){toast('وصلت الحد الأعلى للأنواع المضافة (20)');return}
+    const k=isNew?'c_'+Date.now().toString(36):f.type,row={k,label,steps:[...f.steps]},i=list.findIndex(x=>x.k===k);
+    if(i>=0)list[i]=row;else list.push(row);
+    if(!(await saveCustom(list)))return;
+    f.type=k;f.label=label;toast(isNew?'تمت إضافة النوع: '+label:'تم حفظ النوع: '+label);drawTpl();return;
+  }
+  if(!f.steps.length){toast('أضف مرحلة واحدة على الأقل');return}
   const {error}=await sb.from('templates').upsert({type:f.type,steps:f.steps,updated_at:new Date().toISOString()});
   if(error){toast('تعذر الحفظ');return}
   S.tpl[f.type]=[...f.steps];toast('تم حفظ قالب: '+TYPES[f.type].label);
@@ -671,11 +698,11 @@ function vHome(){
 }
 function vWorksShell(){
   const chips=[['all','الكل'],['prog','قيد التنفيذ'],['late','متأخرة'],['new','لم تبدأ'],['done','مكتملة'],['rej','العروض المرفوضة']];
-  return`<input class="input" id="q" placeholder="ابحث بالعنوان أو العميل أو رقم القضية" value="${esc(S.q)}" style="margin-bottom:10px"><div class="chips">${chips.map(([k,l])=>`<button class="chip ${S.st===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div><div id="list"></div>`;
+  return`<input class="input" id="q" placeholder="ابحث بالعنوان أو العميل أو النوع أو رقم القضية" value="${esc(S.q)}" style="margin-bottom:10px"><div class="chips">${chips.map(([k,l])=>`<button class="chip ${S.st===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div><div id="list"></div>`;
 }
 function drawList(){
   const el=$('#list');if(!el)return;const q=S.q.trim().toLowerCase();const order={late:0,prog:1,new:2,done:3,rej:4};
-  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej':s===S.st)&&(!q||[w.title,w.client,w.ref,w.code].join(' ').toLowerCase().includes(q))})
+  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej':s===S.st)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q))})
     .sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(statusOf(a)==='done'?doneAt(b)-doneAt(a):keyDate(a).localeCompare(keyDate(b))));
   el.innerHTML=(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
 }
@@ -751,7 +778,7 @@ function openWorkForm(id){
 }
 function drawForm(){
   const f=S.sheet;const ft=$('#ftypes');
-  if(ft){f.flow=f.type==='case';ft.innerHTML=Object.entries(TYPES).map(([k,v])=>`<button type="button" class="chip ${f.type===k?'on':''}" data-ftype="${k}">${v.label}</button>`).join('')}
+  if(ft){f.flow=f.type==='case';ft.innerHTML=Object.entries(TYPES).sort((a,b)=>(a[0]==='other')-(b[0]==='other')).map(([k,v])=>`<button type="button" class="chip ${f.type===k?'on':''}" data-ftype="${esc(k)}">${esc(v.label)}</button>`).join('')}
   $('#fdue').classList.toggle('hidden',f.flow);
   $('#fcase')?.classList.toggle('hidden',!f.flow);
   $('#fstepsBox')?.classList.toggle('hidden',f.flow);
@@ -790,7 +817,7 @@ function openAccount(){
   <button class="primary" style="margin-bottom:10px;background:var(--gold);color:var(--navy)" data-act="calc">🧮 حاسبة التسعير (تجريبي)</button>
   <button class="primary" style="margin-bottom:10px;background:var(--blue2)" data-act="push">🔔 الإشعارات على هذا الجهاز</button>
   ${isAdmin()?'<button class="primary" style="margin-bottom:10px;background:var(--green)" data-act="backup">💾 نسخة احتياطية (Excel)</button>':''}
-  ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">قوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
+  ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">أنواع الأعمال وقوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
   <button class="primary" style="margin-bottom:10px;background:#fff;color:var(--navy);border:1.5px solid var(--line)" data-act="pass">🔑 تغيير كلمة المرور</button>
   <button class="primary" style="background:var(--red)" data-act="logout">تسجيل الخروج</button>`);
 }
@@ -840,7 +867,7 @@ document.addEventListener('click',async e=>{
   if(d.ctype){S.sheet.type=d.ctype;drawCalc();return}
   if(d.csize){S.sheet.size=d.csize;drawCalc();return}
   if(d.ctog){S.sheet[d.ctog]=!S.sheet[d.ctog];drawCalc();return}
-  if(d.tpltype){S.sheet.type=d.tpltype;S.sheet.steps=[...stepsFor(d.tpltype)];drawTpl();return}
+  if(d.tpltype){const k=d.tpltype;S.sheet.type=k;if(k==='__new'||!TYPES[k]){S.sheet.type='__new';S.sheet.label='';S.sheet.steps=[]}else{S.sheet.label=TYPES[k].custom?TYPES[k].label:'';S.sheet.steps=[...stepsFor(k)]}drawTpl();return}
   if(d.tplrm!==undefined){S.sheet.steps.splice(+d.tplrm,1);drawTpl();return}
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
   if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
@@ -885,6 +912,7 @@ document.addEventListener('click',async e=>{
     case'pushoff':pushOff();break;
     case'tpl':openTpl();break;
     case'tplsave':tplSave();break;
+    case'tpldel':{const k=S.sheet.type,n=S.works.filter(x=>x.type===k).length;if(n){toast('ما ينحذف: فيه '+n+' عمل من هذا النوع');break}arm(t,'اضغط مرة ثانية للتأكيد','حذف هذا النوع',async()=>{if(await saveCustom(customTypes().filter(x=>x.k!==k))){toast('تم حذف النوع');S.sheet.type='report';S.sheet.label='';S.sheet.steps=[...stepsFor('report')];drawTpl()}});break}
     case'tpladd':{const i=$('#tplstep');const v=i.value.trim();if(v){S.sheet.steps.push(v);i.value='';drawTpl()}break}
     case'logout':closeSheet();await pushDrop();await sb.auth.signOut();break;
     case'tipoff':ls('abn_tip_off','1');renderView();break;
@@ -902,7 +930,7 @@ document.addEventListener('change',e=>{
   const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};if(v)f.dates[k]=v;else delete f.dates[k];
   updateWork(w.id,{flow:f});
 });
-document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}const g=e.target.dataset?.cfg;if(g&&S.sheet?.draft){const v=parseFloat(e.target.value);if(!isNaN(v)&&v>=0)S.sheet.draft[S.sheet.type][g]=v}const k=e.target.dataset?.cnum;if(k&&S.sheet?.kind==='calc'){const v=parseInt(e.target.value,10);S.sheet[k]=isNaN(v)?1:Math.max(1,Math.min(99,v));drawRes()}});
+document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}if(e.target.id==='tlabel'&&S.sheet?.kind==='tpl')S.sheet.label=e.target.value;const g=e.target.dataset?.cfg;if(g&&S.sheet?.draft){const v=parseFloat(e.target.value);if(!isNaN(v)&&v>=0)S.sheet.draft[S.sheet.type][g]=v}const k=e.target.dataset?.cnum;if(k&&S.sheet?.kind==='calc'){const v=parseInt(e.target.value,10);S.sheet[k]=isNaN(v)?1:Math.max(1,Math.min(99,v));drawRes()}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='nstep'||e.target.id==='fstep')){e.preventDefault();document.querySelector(e.target.id==='nstep'?'[data-act=addstep]':'[data-act=fstep]').click()}});
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet()});
 $('#fab').addEventListener('click',()=>{S.tab==='ann'?openAnnForm():openWorkForm()});
