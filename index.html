@@ -167,6 +167,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .msg.me{align-self:flex-end;background:var(--navy);color:#fff}
 .msg b{font-size:11.5px;color:var(--blue2);display:block}.msg.me b{color:var(--gold2)}
 .msg p{line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.men{color:var(--blue2);font-weight:700}.msg.me .men{color:var(--gold2)}.men.mine{background:var(--gold);color:var(--navy);border-radius:6px;padding:0 4px}
 .msg small{font-size:10.5px;color:var(--mute)}.msg.me small{color:#B8C7DD}
 .cbadge{font-size:11px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap}
 .chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
@@ -351,7 +352,7 @@ function chatBase(){let b=+(ls('abn_chat_base')||0);if(!b){b=Date.now();ls('abn_
 function unreadOf(id){const s=Math.max(seenMap()[id]||0,chatBase());return S.msgs.filter(m=>m.work_id===id&&m.author!==myId()&&tsMs(m.created_at)>s)}
 function markSeen(id){const m=seenMap();m[id]=Date.now();ls('abn_chat_seen',JSON.stringify(m))}
 async function loadMsgs(){
-  const {data,error}=await sb.from('messages').select('id,work_id,author,created_at').order('created_at',{ascending:false}).limit(500);
+  const {data,error}=await sb.from('messages').select('id,work_id,author,created_at,body').order('created_at',{ascending:false}).limit(500);
   if(error)return;S.msgs=data||[];
   if(S.sheet?.kind==='detail')markSeen(S.sheet.id);
   renderNav();if(!S.sheet)renderView();
@@ -362,7 +363,7 @@ async function loadChat(id){
 }
 function drawChat(scroll){
   const el=$('#dChat');if(!el||!S.chat||S.chat.id!==S.sheet?.id)return;
-  el.innerHTML=S.chat.rows.length?S.chat.rows.map(m=>{const me=m.author===myId();return`<div class="msg ${me?'me':''}"><b>${esc(me?'أنت':nm(m.author))}</b><p>${esc(m.body)}</p><small>${fmtDT(m.created_at)}</small></div>`}).join(''):'<div class="meta" style="padding:8px 4px">ما فيه رسائل بعد. اكتب أول رسالة.</div>';
+  el.innerHTML=S.chat.rows.length?S.chat.rows.map(m=>{const me=m.author===myId();return`<div class="msg ${me?'me':''}"><b>${esc(me?'أنت':nm(m.author))}</b><p>${menHtml(m.body)}</p><small>${fmtDT(m.created_at)}</small></div>`}).join(''):'<div class="meta" style="padding:8px 4px">ما فيه رسائل بعد. اكتب أول رسالة.</div>';
   if(scroll)el.scrollTop=el.scrollHeight;
 }
 async function sendMsg(){
@@ -375,13 +376,19 @@ function onMsg(p){
   const m=(p&&p.new)||{};
   if(S.sheet?.kind==='detail'&&S.sheet.id===m.work_id){loadChat(m.work_id);loadMsgs();return}
   loadMsgs();
-  if(m.author&&m.author!==myId()){const w=S.works.find(x=>x.id===m.work_id);const t=w?w.title:'عمل';toast('💬 '+nm(m.author)+' كتب في: '+(t.length>28?t.slice(0,28)+'…':t))}
+  if(m.author&&m.author!==myId()){const w=S.works.find(x=>x.id===m.work_id);const t=w?w.title:'عمل';toast((menMe(m.body)?'📣 '+nm(m.author)+' ذكرك في: ':'💬 '+nm(m.author)+' كتب في: ')+(t.length>28?t.slice(0,28)+'…':t))}
 }
 function chatAlerts(){
   const rows=S.works.map(w=>[w,unreadOf(w.id)]).filter(x=>x[1].length);
-  return rows.length?`<div class="card alertc chatc">${rows.slice(0,8).map(([w,u])=>`<div class="al" data-open="${esc(w.id)}"><b>💬 ${esc([...new Set(u.map(m=>nm(m.author)))].join('، '))} كتب في العمل (${u.length})</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
+  return rows.length?`<div class="card alertc chatc">${rows.slice(0,8).map(([w,u])=>`<div class="al" data-open="${esc(w.id)}"><b>${u.some(m=>menMe(m.body))?'📣 ذكرك ':'💬 '}${esc([...new Set(u.map(m=>nm(m.author)))].join('، '))}${u.some(m=>menMe(m.body))?' في العمل':' كتب في العمل'} (${u.length})</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
 }
 
+/* ---------- المنشن ---------- */
+const first=n=>String(n||'').trim().split(/\s+/)[0]||'';
+const menMe=b=>{const f=first(S.me?.full_name);return !!f&&String(b||'').includes('@'+f)};
+function menRow(){const o=S.profiles.filter(p=>p.id!==myId()&&first(p.full_name));return o.length?`<div class="wrap" style="margin-bottom:6px"><span class="meta" style="align-self:center">منشن:</span>${o.map(p=>`<button class="chip" data-men="${esc(first(p.full_name))}">@${esc(first(p.full_name))}</button>`).join('')}</div>`:''}
+function menHtml(b){let h=esc(b);S.profiles.forEach(p=>{const f=first(p.full_name);if(!f)return;const t=esc('@'+f);h=h.split(t).join(`<span class="men${p.id===myId()?' mine':''}">${t}</span>`)});return h}
+function menAdd(n){const i=$('#nmsg');if(!i)return;const a=i.selectionStart??i.value.length,v=i.value,pre=v.slice(0,a),t=(pre&&!/\s$/.test(pre)?' ':'')+'@'+n+' ';i.value=pre+t+v.slice(a);i.focus();const c=pre.length+t.length;try{i.setSelectionRange(c,c)}catch(e){}}
 /* ---------- قوالب المراحل ---------- */
 const stepsFor=t=>(S.tpl[t]&&S.tpl[t].length?S.tpl[t]:TYPES[t].steps);
 async function loadTpl(){const {data,error}=await sb.from('templates').select('*');if(error)return;S.tpl=Object.fromEntries((data||[]).map(r=>[r.type,r.steps||[]]))}
@@ -655,7 +662,7 @@ function openDetail(id){
   openSheet(`<div class="row"><span></span><button class="x" data-act="close">×</button></div><div id="dBody"></div>
   ${fl?'':'<div class="inl"><input class="input" id="nstep" placeholder="أضف مرحلة جديدة" maxlength="80"><button class="sbtn" data-act="addstep">إضافة</button></div>'}
   <div class="sec"><h2>المحادثة</h2></div><div id="dNotes"></div><div id="dChat" class="chat"></div>
-  <div class="inl"><textarea class="input" id="nmsg" rows="2" placeholder="اكتب رسالة…" maxlength="1000" style="resize:none"></textarea><button class="sbtn" data-act="sendmsg">إرسال</button></div>
+  ${menRow()}<div class="inl"><textarea class="input" id="nmsg" rows="2" placeholder="اكتب رسالة…" maxlength="1000" style="resize:none"></textarea><button class="sbtn" data-act="sendmsg">إرسال</button></div>
   <div class="sec"><h2>سجل النشاط</h2></div><div id="dAct" class="card" style="padding:4px 14px"><div class="meta" style="padding:8px 0">جاري التحميل…</div></div>
   <div class="acts"><button class="btn2" data-act="editwork">تعديل البيانات</button>${isAdmin()?'<button class="btnd" data-act="delwork">حذف</button>':''}</div>`);
   refreshDetail();loadAct(id);S.chat=null;loadChat(id);
@@ -767,8 +774,9 @@ async function openLog(){
 let armT=null;
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men]');if(!t)return;
   const d=t.dataset;
+  if(d.men){menAdd(d.men);return}
   if(d.ctype){S.sheet.type=d.ctype;drawCalc();return}
   if(d.csize){S.sheet.size=d.csize;drawCalc();return}
   if(d.ctog){S.sheet[d.ctog]=!S.sheet[d.ctog];drawCalc();return}
