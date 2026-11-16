@@ -3,7 +3,7 @@ self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('push',e=>{
   let d={};try{d=e.data?e.data.json():{}}catch(x){}
-  e.waitUntil(self.registration.showNotification(d.title||'ABN',{body:d.body||'',data:{work:d.work||null},tag:d.work||'abn',dir:'rtl',lang:'ar'}));
+  e.waitUntil(self.registration.showNotification(d.title||'ABN',{body:d.body||'',data:{work:d.work||null},tag:d.work||('abn-'+Date.now()),dir:'rtl',lang:'ar'}));
 });
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
