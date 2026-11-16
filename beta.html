@@ -463,7 +463,8 @@ function timeline(w){
 /* ---------- النسخة الاحتياطية ---------- */
 const BKKEY='abn_bk';
 const bkLast=()=>{try{return +localStorage.getItem(BKKEY)||0}catch(e){return 0}};
-const bkDue=()=>isAdmin()&&S.works.length>0&&Date.now()-bkLast()>7*864e5;
+const BKUSER='f4d1312c-3b69-4605-906a-c6cef9e966a0';
+const bkDue=()=>S.me?.id===BKUSER&&S.works.length>0&&Date.now()-bkLast()>7*864e5;
 function bkNote(){return bkDue()?`<div class="card goldEdge" data-act="backup" style="cursor:pointer"><b>💾 النسخة الاحتياطية الأسبوعية</b><div class="meta" style="margin-top:4px;line-height:1.7">${bkLast()?'مر أكثر من أسبوع على آخر نسخة نزّلتها على هذا الجهاز.':'ما نزّلت نسخة احتياطية على هذا الجهاز بعد.'} اضغط هنا لتنزيل ملف Excel.</div></div>`:''}
 function loadXLSX(){return window.XLSX?Promise.resolve():new Promise((ok,no)=>{const x=document.createElement('script');x.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';x.onload=ok;x.onerror=no;document.head.appendChild(x)})}
 async function allRows(t,ord){let out=[],i=0;for(;;){const {data,error}=await sb.from(t).select('*').order(ord,{ascending:true}).range(i,i+999);if(error)throw error;out=out.concat(data||[]);if(!data||data.length<1000)break;i+=1000}return out}
