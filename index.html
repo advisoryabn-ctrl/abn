@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous"></script>
 <style>
 :root{--navy:#0B2545;--blue:#13406F;--blue2:#1F5E9E;--gold:#C9A24A;--gold2:#E8D29B;--bg:#F3F5F9;--ink:#14213D;--mute:#6B7891;--line:#E3E8F0;--red:#B42318;--green:#147D45;--amber:#B45309;--st:env(safe-area-inset-top);--sb:env(safe-area-inset-bottom)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -208,6 +208,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <script>
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
+if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 
 const TYPES={
@@ -264,8 +265,9 @@ function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorag
 const isFlow=w=>w.type==='case'&&!!(w.flow&&w.flow.stage);
 function eff(w){
   const f=w.flow,s=f.stage,d=f.dates||{};let dl=null;
-  if(s==='accept')dl=d.offer?addWork(d.offer,5):null;
-  else if(s==='pay')dl=d.accepted?addWork(d.accepted,10):null;
+  const ro=a=>a&&f.reopened&&f.reopened>a?f.reopened:a;
+  if(s==='accept')dl=d.offer?addWork(ro(d.offer),5):null;
+  else if(s==='pay')dl=d.accepted?addWork(ro(d.accepted),10):null;
   else if(s==='expert')dl=d.paid?addWork(d.paid,10):null;
   else if(s==='report')dl=d.expert?addDays(d.expert,30):(w.due||null);
   else if(s==='objection')dl=d.report?addWork(d.report,5):null;
@@ -301,7 +303,7 @@ $('#lf').addEventListener('submit',async e=>{
   e.preventDefault();const f=new FormData(e.target);const b=$('#lbtn');b.disabled=true;b.textContent='جاري الدخول…';
   const {error}=await sb.auth.signInWithPassword({email:String(f.get('email')).trim(),password:String(f.get('pass'))});
   b.disabled=false;b.textContent='دخول';
-  if(error)toast('تأكد من الإيميل وكلمة المرور');
+  if(error)toast(!error.status||/fetch|network/i.test(error.message||'')?'تعذر الاتصال، تأكد من الإنترنت':'تأكد من الإيميل وكلمة المرور');
 });
 sb.auth.onAuthStateChange((_e,session)=>{const was=!!S.session;S.session=session;if(!!session!==was||!S.booted){S.booted=true;session?startApp():showLogin()}});
 function showLogin(){$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
@@ -316,13 +318,13 @@ async function load(){
   ]);
   if(!w.error)S.works=w.data;if(!a.error)S.anns=a.data;if(!p.error)S.profiles=p.data;
   S.err=(w.error||a.error||p.error)?'تعذر تحميل البيانات، تأكد من الاتصال':null;
-  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();
+  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();openPending();
   if(S.sheet?.kind==='detail')loadAct(S.sheet.id);
 }
 const loadSoon=()=>{clearTimeout(loadTimer);loadTimer=setTimeout(load,300)};
 function startApp(){
   $('#login').classList.add('hidden');['#app','#tabs'].forEach(s=>$(s).classList.remove('hidden'));
-  S.loaded=false;renderAll();load();
+  S.loaded=false;renderAll();load();pushSync();
   if(channel)sb.removeChannel(channel);
   channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).subscribe();
 }
@@ -422,7 +424,7 @@ async function openPush(){
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">الإشعارات</h2><button class="x" data-act="close">×</button></div><div id="pBody"><div class="spin"></div></div>`);
   if(!pushOK()){$('#pBody').innerHTML=`<div class="notice">هذا المتصفح ما يدعم الإشعارات.<br><b>على الآيفون:</b> لازم تفتح التطبيق من أيقونته في الشاشة الرئيسية (مو من Safari مباشرة)، ويكون النظام iOS 16.4 أو أحدث. إذا كانت الأيقونة مضافة من قبل وما اشتغلت، احذفها وأضفها من جديد.</div>`;return}
   const sub=await pushSub();const el=$('#pBody');if(!el||S.sheet?.kind!=='push')return;
-  const info='<div class="meta" style="margin-top:6px;line-height:1.7">يوصلك إشعار لما أحد يكتب في محادثة عمل، وتذكير بالجلسة قبلها بيوم وفي يومها. التفعيل خاص بهذا الجهاز.</div>';
+  const info='<div class="meta" style="margin-top:6px;line-height:1.7">يوصلك إشعار لما أحد يكتب في محادثة عمل أو يذكرك فيها، وعند نشر تعميم جديد، وتذكير بالجلسة قبلها بيوم وفي يومها، والتذكيرات الشهرية. التفعيل خاص بهذا الجهاز.</div>';
   el.innerHTML=sub&&Notification.permission==='granted'
     ?`<div class="card">✅ الإشعارات <b>مفعّلة</b> على هذا الجهاز.${info}</div><button class="primary" style="background:var(--red)" data-act="pushoff">إيقاف الإشعارات</button>`
     :`<div class="card">الإشعارات <b>غير مفعّلة</b> على هذا الجهاز.${info}</div>${Notification.permission==='denied'?'<div class="notice">الإشعارات مرفوضة من إعدادات الجهاز. فعّلها من: الإعدادات ← الإشعارات ← ABN.</div>':''}<button class="primary" data-act="pushon">تفعيل الإشعارات</button>`;
@@ -444,8 +446,21 @@ async function pushOff(){
   try{const sub=await pushSub();if(sub){await sb.rpc('drop_push',{p_endpoint:sub.endpoint});await sub.unsubscribe()}toast('تم إيقاف الإشعارات')}catch(e){}
   openPush();
 }
-if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',e=>{const id=e.data&&e.data.open;if(id&&S.loaded&&S.works.some(w=>w.id===id)){S.tab='works';renderAll();openDetail(id)}});
+if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',e=>{const id=e.data&&e.data.open;if(id){pendOpen=id;openPending()}});
 
+/* فتح عمل من إشعار */
+let pendOpen=(location.hash.match(/^#w-(.+)$/)||[])[1]||null;
+function openPending(){
+  if(!pendOpen||!S.loaded)return;const id=pendOpen;pendOpen=null;
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  if(S.works.some(w=>w.id===id)){S.tab='works';renderAll();openDetail(id)}
+}
+/* تحديث اشتراك الإشعارات لهذا الجهاز باسم المستخدم الحالي */
+function pushSync(){
+  try{if(!pushOK()||Notification.permission!=='granted')return;
+    pushSub().then(sub=>{if(!sub)return;const j=sub.toJSON();if(j&&j.keys)sb.rpc('save_push',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth}).then(()=>{},()=>{})}).catch(()=>{})}catch(e){}
+}
+async function pushDrop(){try{const sub=await pushSub();if(sub){await sb.rpc('drop_push',{p_endpoint:sub.endpoint});await sub.unsubscribe()}}catch(e){}}
 /* ---------- الخط الزمني للقضية ---------- */
 const ML={received:'الاستلام',offer:'إرسال العرض',accepted:'قبول العميل',paid:'الدفع',expert:'تعيين الخبير',report:'التقرير الأولي',objected:'الاعتراض',returned:'إرجاع الشيخ',final:'التقرير النهائي',done:'الاكتمال'};
 const MK=Object.keys(ML);
@@ -586,7 +601,7 @@ function renderTop(){
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar" data-act="account">${esc((S.me?.full_name||'م').trim().charAt(0))}</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&(S.tab!=='ann'||isAdmin())));
 }
-function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>tsMs(a.created_at)>seen).length}
+function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.created_by!==myId()&&tsMs(a.created_at)>seen).length}
 function renderNav(){
   const u=S.tab==='ann'?0:unread();const cu=S.works.reduce((n,w)=>n+unreadOf(w.id).length,0);
   $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['ann','التعاميم']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
@@ -601,7 +616,7 @@ function renderView(){
   if(!S.loaded){v.innerHTML='<div class="card"><div class="spin"></div></div>';return}
   const n=S.err?`<div class="notice">${esc(S.err)}</div>`:'';
   if(S.tab==='home')v.innerHTML=n+installTip()+vHome();
-  else if(S.tab==='works'){v.innerHTML=n+vWorksShell();drawList()}
+  else if(S.tab==='works'){if($('#q')&&$('#list')&&$('#errn')){$('#errn').innerHTML=n;drawList()}else{v.innerHTML='<div id="errn">'+n+'</div>'+vWorksShell();drawList()}}
   else v.innerHTML=n+vAnn();
 }
 function bar(p,st,cls=''){return`<div class="bar ${cls||(st==='done'?'done':st==='late'?'late':'')}"><i style="width:${p}%"></i></div>`}
@@ -771,7 +786,8 @@ async function openLog(){
 }
 
 /* ---------- الأحداث ---------- */
-let armT=null;
+let armT=null,factT=0;
+const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men]');if(!t)return;
@@ -793,8 +809,10 @@ document.addEventListener('click',async e=>{
   const w=S.sheet?.kind==='detail'?S.works.find(x=>x.id===S.sheet.id):null;
   if(d.fact!==undefined&&w&&isFlow(w)){
     const a=(ACTS[eff(w).base]||[])[+d.fact];if(!a)return;
-    const dt=$('#adate')?.value||todayISO();const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};
-    if(a[1]==='reopen'){f.stage=f.prev||'accept';delete f.prev;delete f.reason;delete f.dates.rejected}
+    if(Date.now()-factT<900)return;factT=Date.now();
+    const dt=$('#adate')?.value||todayISO();
+    if(a[1]!=='reopen'){const pk=PREVK[w.flow.stage],pv=pk==='received'?w.received:(w.flow.dates||{})[pk];if(pv&&dt<pv){toast('تاريخ الإجراء قبل تاريخ المرحلة السابقة ('+fmtD(pv)+')');return}}const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};
+    if(a[1]==='reopen'){f.stage=f.prev||'accept';delete f.prev;delete f.reason;delete f.dates.rejected;f.reopened=dt}
     else{
       if(a[1]==='rejected'){f.prev=f.stage;f.reason=a[0]}
       f.dates[a[2]]=dt;
@@ -823,11 +841,10 @@ document.addEventListener('click',async e=>{
     case'tpl':openTpl();break;
     case'tplsave':tplSave();break;
     case'tpladd':{const i=$('#tplstep');const v=i.value.trim();if(v){S.sheet.steps.push(v);i.value='';drawTpl()}break}
-    case'logout':closeSheet();await sb.auth.signOut();break;
+    case'logout':closeSheet();await pushDrop();await sb.auth.signOut();break;
     case'tipoff':ls('abn_tip_off','1');renderView();break;
     case'fstep':{const i=$('#fstep');const v=i.value.trim();if(v){S.sheet.steps.push(v);i.value='';drawForm()}break}
     case'addstep':{const i=$('#nstep');const v=i.value.trim();if(!v||!w)break;i.value='';local(w.id,withCompletion(w,[...(w.steps||[]),{t:v,done:false}]));rpc('add_step',{p_work:w.id,p_text:v});break}
-    case'addnote':{const i=$('#nnote');const v=i.value.trim();if(!v||!w)break;i.value='';local(w.id,{notes:[...(w.notes||[]),{text:v,at:new Date().toISOString(),by:myId()}]});rpc('add_note',{p_work:w.id,p_text:v});toast('تم نشر التحديث');break}
     case'editwork':if(w)openWorkForm(w.id);break;
     case'delwork':if(w)arm(t,'اضغط مرة ثانية للتأكيد','حذف',async()=>{const id=w.id;closeSheet();const {error}=await sb.from('works').delete().eq('id',id);toast(error?'تعذر الحذف':'تم حذف العمل');load()});break;
   }
