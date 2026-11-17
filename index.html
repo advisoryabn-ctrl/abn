@@ -209,7 +209,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.17.3';
+const APP_V='2026.11.17.4';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -1013,15 +1013,18 @@ function openAccount(){
   <div class="meta" style="text-align:center;margin-top:12px" dir="ltr">v${APP_V}</div>`);
 }
 /* ---------- التنبيهات الشهرية ---------- */
+const hrLbl=h=>{h=+h;if(isNaN(h))h=8;return h===0?'12 منتصف الليل':h<12?h+' الصبح':h===12?'12 الظهر':h<16?(h-12)+' الظهر':h<18?(h-12)+' العصر':(h-12)+' المساء'};
 function openRem(){
   S.sheet={kind:'rem',rows:null};
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">التنبيهات</h2><button class="x" data-act="close">×</button></div>
   <div class="sec" style="margin-top:4px"><h2>التنبيهات الشهرية</h2></div>
-  <div class="notice">كل تنبيه يوصل إشعار على الجوال <b>لكل الموظفين</b> الساعة 8 الصبح في يومه من كل شهر، ومعه تنبيه مبكر قبله بيومين.</div>
+  <div class="notice">كل تنبيه يوصل إشعار على الجوال <b>لكل الموظفين</b> في يومه ووقته من كل شهر. وتقدر تختار معه تنبيه مبكر قبله بيومين.</div>
   <div id="remList"><div class="card"><div class="spin"></div></div></div>
   ${isAdmin()?`<div class="card"><b>تنبيه شهري جديد</b>
    <div class="fld" style="margin-top:10px"><label class="lbl">وش التنبيه؟</label><input class="input" id="rm_t" maxlength="120" placeholder="مثال: رفع إقرار ضريبة القيمة المضافة"></div>
    <div class="fld"><label class="lbl">يوم الشهر (من 1 إلى 28)</label><input class="input" id="rm_d" type="number" inputmode="numeric" min="1" max="28" placeholder="12"></div>
+   <div class="fld"><label class="lbl">الساعة</label><select class="input" id="rm_h">${[...Array(24).keys()].map(h=>`<option value="${h}" ${h===8?'selected':''}>${hrLbl(h)}</option>`).join('')}</select></div>
+   <label class="meta" style="display:flex;align-items:center;gap:8px;margin:0 2px 12px"><input type="checkbox" id="rm_e" checked style="width:18px;height:18px"> تنبيه مبكر قبله بيومين (بنفس الساعة)</label>
    <button class="primary" data-act="remadd">إضافة التنبيه</button>
    <div class="meta" style="margin-top:8px;line-height:1.7">الحد 28 عشان التنبيه يشتغل في كل الشهور، حتى فبراير.</div></div>`:''}
   <div class="sec"><h2>تنبيهات تلقائية ثابتة</h2></div>
@@ -1037,16 +1040,16 @@ function drawRem(){
   const el=$('#remList');if(!el||S.sheet?.kind!=='rem')return;
   if(S.sheet.err){el.innerHTML='<div class="notice">تعذر تحميل التنبيهات. تأكد من الاتصال.</div>';return}
   const r=S.sheet.rows||[];
-  el.innerHTML=r.length?`<div class="card" style="padding:4px 14px">${r.map(x=>`<div class="drow"><label><b>يوم ${x.day}</b> · ${esc(x.title)}</label>${isAdmin()?`<button class="dclr" data-remdel="${x.id}">حذف</button>`:''}</div>`).join('')}</div>`:'<div class="card empty">ما فيه تنبيهات شهرية.</div>';
+  el.innerHTML=r.length?`<div class="card" style="padding:4px 14px">${r.map(x=>`<div class="drow"><label><b>يوم ${x.day}</b> · ${esc(x.title)}<div class="meta" style="margin-top:2px">الساعة ${hrLbl(x.hour??8)}${x.early===false?'':' · ومعه تنبيه مبكر قبله بيومين'}</div></label>${isAdmin()?`<button class="dclr" data-remdel="${x.id}">حذف</button>`:''}</div>`).join('')}</div>`:'<div class="card empty">ما فيه تنبيهات شهرية.</div>';
 }
 async function remAdd(){
   const ti=$('#rm_t'),di=$('#rm_d');if(!ti||!di)return;
-  const title=ti.value.trim(),day=parseInt(di.value,10);
+  const title=ti.value.trim(),day=parseInt(di.value,10),hi=$('#rm_h'),ei=$('#rm_e'),hour=hi?parseInt(hi.value,10):8,early=ei?ei.checked:true;
   if(!title){toast('اكتب نص التنبيه');return}
   if(!(day>=1&&day<=28)){toast('اليوم لازم يكون من 1 إلى 28');return}
-  const {error}=await sb.from('monthly_reminders').insert({day,title});
+  const {error}=await sb.from('monthly_reminders').insert({day,title,hour,early});
   if(error){toast('تعذر حفظ التنبيه');return}
-  ti.value='';di.value='';toast('تمت إضافة التنبيه ليوم '+day+' من كل شهر');loadRem();
+  ti.value='';di.value='';toast('تمت إضافة التنبيه ليوم '+day+' الساعة '+hrLbl(hour));loadRem();
 }
 async function remDel(id){
   const {error}=await sb.from('monthly_reminders').delete().eq('id',id);
