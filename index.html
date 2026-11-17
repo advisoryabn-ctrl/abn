@@ -40,6 +40,7 @@ button{cursor:pointer;border:0;background:none}
 .logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#D9B562,#A8822F);display:grid;place-items:center;font:700 21px Georgia,serif;color:var(--navy)}
 .brand b{font-size:17px;display:block;direction:ltr;text-align:right}
 .brand small{display:block;font-size:10.5px;color:var(--gold2);direction:ltr}
+.avatar.setb{width:auto;border-radius:999px;padding:0 13px;font-size:12.5px;font-weight:600;white-space:nowrap}
 .avatar{margin-inline-start:auto;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-weight:700;border:1px solid rgba(201,162,74,.6);color:#fff}
 .hello{margin-top:18px;position:relative}
 .hello p{font-size:12.5px;color:#B8C7DD}
@@ -208,7 +209,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.16.3';
+const APP_V='2026.11.17.1';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -771,7 +772,7 @@ function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();i
 function renderTop(){
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
   const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
-  $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar" data-act="account">${esc((S.me?.full_name||'م').trim().charAt(0))}</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
+  $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&S.tab!=='tasks'&&(S.tab!=='ann'||isAdmin())));
 }
 function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.created_by!==myId()&&tsMs(a.created_at)>seen).length}
@@ -945,17 +946,62 @@ function openAnnForm(){
 }
 function openAccount(){
   S.sheet={kind:'acc'};
-  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">${esc(S.me?.full_name||'حسابي')}</h2><button class="x" data-act="close">×</button></div>
-  <div class="card"><div class="meta">البريد الإلكتروني</div><b dir="ltr" style="display:block;text-align:right">${esc(S.session?.user?.email)}</b><div class="meta" style="margin-top:10px">الصلاحية</div><b>${isAdmin()?'مدير':'موظف'}</b></div>
-  <button class="primary" style="margin-bottom:10px;background:var(--gold);color:var(--navy)" data-act="calc">🧮 حاسبة التسعير (تجريبي)</button>
-  <button class="primary" style="margin-bottom:10px;background:var(--blue2)" data-act="push">🔔 الإشعارات على هذا الجهاز</button>
-  ${isAdmin()?'<button class="primary" style="margin-bottom:10px;background:var(--green)" data-act="backup">💾 نسخة احتياطية (Excel)</button>':''}
-  ${isAdmin()?'<button class="primary" style="margin-bottom:10px" data-act="tpl">أنواع الأعمال وقوالب المراحل</button><button class="primary" style="margin-bottom:10px" data-act="log">سجل النشاط العام</button>':''}
-  ${isAdmin()?`<button class="primary" style="margin-bottom:10px;background:#fff;color:var(--navy);border:1.5px solid var(--line)" data-act="trash">🗑 سلة المحذوفات${(S.trash||[]).length?' ('+S.trash.length+')':''}</button>`:''}
-  <button class="primary" style="margin-bottom:10px;background:#fff;color:var(--navy);border:1.5px solid var(--line)" data-act="pass">🔑 تغيير كلمة المرور</button>
-  <button class="primary" style="margin-bottom:10px;background:var(--red)" data-act="logout">تسجيل الخروج</button>
+  const H=t=>`<div class="meta" style="margin:16px 4px 8px;font-weight:700;color:var(--navy)">${t}</div>`;
+  const B=(act,label,st)=>`<button class="primary" style="margin-bottom:10px;${st||'background:#fff;color:var(--navy);border:1.5px solid var(--line)'}" data-act="${act}">${label}</button>`;
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">الإعدادات</h2><button class="x" data-act="close">×</button></div>
+  <div class="card"><b>${esc(S.me?.full_name||'حسابي')}</b><div class="meta" dir="ltr" style="text-align:right;margin-top:4px">${esc(S.session?.user?.email)}</div><div class="meta" style="margin-top:4px">الصلاحية: ${isAdmin()?'مدير':'موظف'}</div></div>
+  ${H('الإشعارات والتنبيهات')}
+  ${B('push','🔔 تفعيل الإشعارات على هذا الجهاز','background:var(--blue2)')}
+  ${B('rem','⏰ التنبيهات (عرض وإضافة تنبيه شهري)','background:var(--navy)')}
+  ${H('أدوات')}
+  ${B('calc','🧮 حاسبة التسعير (تجريبي)','background:var(--gold);color:var(--navy)')}
+  ${isAdmin()?H('إدارة المكتب')+B('tpl','🗂 أنواع الأعمال وقوالب المراحل')+B('log','📋 سجل النشاط العام')+B('trash','🗑 سلة المحذوفات'+((S.trash||[]).length?' ('+S.trash.length+')':''))+B('backup','💾 نسخة احتياطية (Excel)','background:var(--green)'):''}
+  ${H('الحساب')}
+  ${B('pass','🔑 تغيير كلمة المرور')}
+  ${B('logout','تسجيل الخروج','background:var(--red)')}
   <button class="abtn no" data-act="logoutall">خروج من كل الأجهزة</button>
   <div class="meta" style="text-align:center;margin-top:12px" dir="ltr">v${APP_V}</div>`);
+}
+/* ---------- التنبيهات الشهرية ---------- */
+function openRem(){
+  S.sheet={kind:'rem',rows:null};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">التنبيهات</h2><button class="x" data-act="close">×</button></div>
+  <div class="sec" style="margin-top:4px"><h2>التنبيهات الشهرية</h2></div>
+  <div class="notice">كل تنبيه يوصل إشعار على الجوال <b>لكل الموظفين</b> الساعة 8 الصبح في يومه من كل شهر، ومعه تنبيه مبكر قبله بيومين.</div>
+  <div id="remList"><div class="card"><div class="spin"></div></div></div>
+  ${isAdmin()?`<div class="card"><b>تنبيه شهري جديد</b>
+   <div class="fld" style="margin-top:10px"><label class="lbl">وش التنبيه؟</label><input class="input" id="rm_t" maxlength="120" placeholder="مثال: رفع إقرار ضريبة القيمة المضافة"></div>
+   <div class="fld"><label class="lbl">يوم الشهر (من 1 إلى 28)</label><input class="input" id="rm_d" type="number" inputmode="numeric" min="1" max="28" placeholder="12"></div>
+   <button class="primary" data-act="remadd">إضافة التنبيه</button>
+   <div class="meta" style="margin-top:8px;line-height:1.7">الحد 28 عشان التنبيه يشتغل في كل الشهور، حتى فبراير.</div></div>`:''}
+  <div class="sec"><h2>تنبيهات تلقائية ثابتة</h2></div>
+  <div class="card" style="line-height:2"><div>💬 رسالة جديدة في محادثة عمل، أو منشن لك</div><div>📢 تعميم جديد</div><div>🔔 الجلسة: قبلها بيوم وفي يومها الساعة 8 الصبح</div><div class="meta" style="margin-top:6px;line-height:1.7">هذي تشتغل لحالها وما تحتاج إضافة. وكلها توصل بس للجهاز اللي مفعّل الإشعارات من الإعدادات.</div></div>`);
+  loadRem();
+}
+async function loadRem(){
+  const {data,error}=await sb.from('monthly_reminders').select('*').order('day',{ascending:true}).order('id',{ascending:true});
+  if(S.sheet?.kind!=='rem')return;
+  S.sheet.rows=error?null:(data||[]);S.sheet.err=!!error;drawRem();
+}
+function drawRem(){
+  const el=$('#remList');if(!el||S.sheet?.kind!=='rem')return;
+  if(S.sheet.err){el.innerHTML='<div class="notice">تعذر تحميل التنبيهات. تأكد من الاتصال.</div>';return}
+  const r=S.sheet.rows||[];
+  el.innerHTML=r.length?`<div class="card" style="padding:4px 14px">${r.map(x=>`<div class="drow"><label><b>يوم ${x.day}</b> · ${esc(x.title)}</label>${isAdmin()?`<button class="dclr" data-remdel="${x.id}">حذف</button>`:''}</div>`).join('')}</div>`:'<div class="card empty">ما فيه تنبيهات شهرية.</div>';
+}
+async function remAdd(){
+  const ti=$('#rm_t'),di=$('#rm_d');if(!ti||!di)return;
+  const title=ti.value.trim(),day=parseInt(di.value,10);
+  if(!title){toast('اكتب نص التنبيه');return}
+  if(!(day>=1&&day<=28)){toast('اليوم لازم يكون من 1 إلى 28');return}
+  const {error}=await sb.from('monthly_reminders').insert({day,title});
+  if(error){toast('تعذر حفظ التنبيه');return}
+  ti.value='';di.value='';toast('تمت إضافة التنبيه ليوم '+day+' من كل شهر');loadRem();
+}
+async function remDel(id){
+  const {error}=await sb.from('monthly_reminders').delete().eq('id',id);
+  if(error){toast('تعذر الحذف');return}
+  toast('تم حذف التنبيه');loadRem();
 }
 /* ---------- تغيير كلمة المرور ---------- */
 function openPass(){
@@ -998,9 +1044,10 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel]');if(!t)return;
   const d=t.dataset;
   if(d.men){menAdd(d.men);return}
+  if(d.remdel){arm(t,'تأكيد','حذف',()=>remDel(+d.remdel));return}
   if(d.tdone){taskToggle(d.tdone);return}
   if(d.tdel){arm(t,'تأكيد','حذف',()=>taskDel(d.tdel));return}
   if(d.restore){trashRestore(d.restore);return}
@@ -1062,6 +1109,8 @@ document.addEventListener('click',async e=>{
     case'editwork':if(w)openWorkForm(w.id);break;
     case'delwork':if(w)arm(t,'اضغط مرة ثانية للتأكيد','حذف',async()=>{const id=w.id;closeSheet();const {error}=await sb.from('works').update({deleted_at:new Date().toISOString(),deleted_by:myId()}).eq('id',id);toast(error?'تعذر الحذف':'نُقل العمل إلى سلة المحذوفات (يُسترجع خلال 30 يومًا)');load()});break;
     case'trash':openTrash();break;
+    case'rem':openRem();break;
+    case'remadd':remAdd();break;
     case'taskadd':taskAdd();break;
     case'tasktoggle':S.tkDone=!S.tkDone;drawTasks();break;
     case'taskclear':arm(t,'اضغط مرة ثانية للتأكيد','مسح المهام المنجزة',()=>taskClear());break;
