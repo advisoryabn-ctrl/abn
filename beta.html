@@ -169,6 +169,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .msg p{line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .men{color:var(--blue2);font-weight:700}.msg.me .men{color:var(--gold2)}.men.mine{background:var(--gold);color:var(--navy);border-radius:6px;padding:0 4px}
 .rd{display:block;font-size:10.5px;margin-top:3px;color:var(--mute)}.msg.me .rd{color:#B8C7DD}.rd.on{color:var(--green);font-weight:600}.msg.me .rd.on{color:var(--gold2)}
+.tk{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}.tk:last-child{border:0}.tk p{font-weight:600;line-height:1.6;word-break:break-word}.tk.done p{text-decoration:line-through;color:var(--mute);font-weight:400}.tk small{display:block;color:var(--mute);font-size:12px;margin-top:2px;line-height:1.7}.tk .wl{color:var(--blue2);font-weight:600;cursor:pointer}.tk .od{color:var(--red);font-weight:600}
 .msg small{font-size:10.5px;color:var(--mute)}.msg.me small{color:#B8C7DD}
 .cbadge{font-size:11px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap}
 .chatc{border-inline-start-color:var(--blue2)}.chatc .al b{color:var(--blue2)}
@@ -207,7 +208,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.16.2';
+const APP_V='2026.11.16.3';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -240,7 +241,7 @@ const FDATES=[['received','استلام القضية'],['offer','إرسال ال
 const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
 const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{}};
+const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -299,6 +300,7 @@ const IC={
   home:'<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   works:'<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
   ann:'<svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  tasks:'<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/></svg>',
   check:'<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg>'
 };
 
@@ -310,7 +312,7 @@ $('#lf').addEventListener('submit',async e=>{
   if(error)toast(!error.status||/fetch|network/i.test(error.message||'')?'تعذر الاتصال، تأكد من الإنترنت':'تأكد من الإيميل وكلمة المرور');
 });
 sb.auth.onAuthStateChange((_e,session)=>{const was=!!S.session;S.session=session;if(!!session!==was||!S.booted){S.booted=true;session?startApp():showLogin()}});
-function showLogin(){$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
+function showLogin(){S.tasks=[];$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
 
 /* ---------- البيانات ---------- */
 let channel=null,loadTimer=null;
@@ -322,7 +324,7 @@ async function load(){
   ]);
   if(!w.error){S.trash=w.data.filter(x=>x.deleted_at);S.works=w.data.filter(x=>!x.deleted_at)}if(!a.error)S.anns=a.data;if(!p.error)S.profiles=p.data;
   S.err=(w.error||a.error||p.error)?'تعذر تحميل البيانات، تأكد من الاتصال':null;
-  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();openPending();
+  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();loadTasks();openPending();
   if(S.sheet?.kind==='detail')loadAct(S.sheet.id);
 }
 const loadSoon=()=>{clearTimeout(loadTimer);loadTimer=setTimeout(load,300)};
@@ -409,6 +411,69 @@ function readLine(m){
   if(names.length)return`<span class="rd on">✓✓ قرأها: ${esc(names.join('، '))}</span>`;
   return mine?'<span class="rd">✓ لم تُقرأ بعد</span>':'';
 }
+/* ---------- مهامي (خاصة بكل موظف) ---------- */
+async function loadTasks(){
+  const {data,error}=await sb.from('tasks').select('*').order('created_at',{ascending:true});
+  if(error)return;S.tasks=data||[];renderNav();
+  if(S.sheet)return;
+  if(S.tab==='tasks')drawTasks();else if(S.tab==='home')renderView();
+}
+const tkOpen=()=>S.tasks.filter(t=>!t.done);
+const tkDueN=()=>{const t=todayISO();return tkOpen().filter(x=>x.due&&x.due<=t).length};
+function tasksNote(){const o=tkOpen().length;if(!o)return'';const k=tkDueN();return`<div class="card" data-tab="tasks" style="cursor:pointer"><b>📝 مهامي</b><div class="meta" style="margin-top:4px">عندك ${o} ${o===1?'مهمة مفتوحة':'مهام مفتوحة'}${k?`، منها <b style="color:var(--red)">${k}</b> مستحقة اليوم أو متأخرة`:''}.</div></div>`}
+function tkWorkOpts(sel){return'<option value="">بدون ربط بعمل</option>'+S.works.filter(w=>['prog','new','late'].includes(statusOf(w))).map(w=>`<option value="${esc(w.id)}"${w.id===sel?' selected':''}>${esc(w.title)}${w.client?' — '+esc(w.client):''}</option>`).join('')}
+function vTasksShell(){
+  return`<div class="card"><input class="input" id="tk_t" maxlength="200" placeholder="اكتب مهمة جديدة…" enterkeyhint="done" aria-label="مهمة جديدة">
+  <select class="input" id="tk_w" style="margin-top:8px" aria-label="ربط بعمل قيد التنفيذ">${tkWorkOpts('')}</select>
+  <div class="dwrap" style="margin-top:8px;align-items:center"><span class="meta" style="flex:none">الموعد (اختياري)</span><input type="date" class="input" id="tk_d" aria-label="موعد المهمة"><button class="sbtn" data-act="taskadd">إضافة</button></div>
+  <div class="meta" style="margin-top:10px">🔒 مهامك خاصة، ما يشوفها أحد غيرك.</div></div><div id="tlist"></div>`;
+}
+function tkRow(x){
+  const t=todayISO(),w=x.work_id?S.works.find(y=>y.id===x.work_id):null;
+  const bits=[];
+  if(w)bits.push(`<span class="wl" data-open="${esc(w.id)}">🔗 ${esc(w.title)}</span>`);
+  if(x.due)bits.push(`<span class="${!x.done&&x.due<t?'od':''}">${!x.done&&x.due<t?'متأخرة · ':x.due===t&&!x.done?'اليوم · ':''}${fmtD(x.due)}</span>`);
+  return`<div class="tk ${x.done?'done':''}"><button class="chk ${x.done?'on':''}" data-tdone="${esc(x.id)}" aria-label="${x.done?'إرجاع المهمة':'إنجاز المهمة'}">${x.done?IC.check:''}</button><div style="flex:1;min-width:0"><p>${esc(x.title)}</p>${bits.length?`<small>${bits.join(' · ')}</small>`:''}</div><button class="dclr" data-tdel="${esc(x.id)}">حذف</button></div>`;
+}
+function drawTasks(){
+  const el=$('#tlist');if(!el)return;
+  const sw=$('#tk_w');if(sw&&document.activeElement!==sw){const v=sw.value;sw.innerHTML=tkWorkOpts(v)}
+  const t=todayISO(),o=tkOpen().sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||tsMs(a.created_at)-tsMs(b.created_at)),dn=S.tasks.filter(x=>x.done).sort((a,b)=>tsMs(b.done_at||b.created_at)-tsMs(a.done_at||a.created_at));
+  let h=`<div class="sec"><h2>المهام المفتوحة (${o.length})</h2></div>`;
+  h+=o.length?`<div class="card" style="padding:2px 14px">${o.map(tkRow).join('')}</div>`:'<div class="card empty">ما عندك مهام مفتوحة. اكتب أول مهمة فوق.</div>';
+  if(dn.length){
+    h+=`<div class="sec"><h2>المنجزة (${dn.length})</h2><button class="lnk" data-act="tasktoggle">${S.tkDone?'إخفاء':'عرض'}</button></div>`;
+    if(S.tkDone)h+=`<div class="card" style="padding:2px 14px">${dn.map(tkRow).join('')}</div><button class="abtn no" data-act="taskclear">مسح المهام المنجزة</button>`;
+  }
+  el.innerHTML=h;
+}
+async function taskAdd(){
+  const ti=$('#tk_t');if(!ti)return;const title=ti.value.trim();
+  if(!title){toast('اكتب المهمة أول');ti.focus();return}
+  const row={title,work_id:$('#tk_w').value||null,due:$('#tk_d').value||null};
+  ti.value='';$('#tk_d').value='';$('#tk_w').value='';
+  const {data,error}=await sb.from('tasks').insert(row).select();
+  if(error||!data||!data.length){toast('تعذر حفظ المهمة');ti.value=title;return}
+  S.tasks=[...S.tasks,data[0]];drawTasks();renderNav();toast('تمت إضافة المهمة');
+}
+async function taskToggle(id){
+  const x=S.tasks.find(t=>t.id===id);if(!x)return;
+  const p={done:!x.done,done_at:x.done?null:new Date().toISOString()};
+  S.tasks=S.tasks.map(t=>t.id===id?{...t,...p}:t);drawTasks();renderNav();
+  const {error}=await sb.from('tasks').update(p).eq('id',id);
+  if(error){toast('تعذر الحفظ');loadTasks()}
+}
+async function taskDel(id){
+  S.tasks=S.tasks.filter(t=>t.id!==id);drawTasks();renderNav();
+  const {error}=await sb.from('tasks').delete().eq('id',id);
+  if(error){toast('تعذر الحذف');loadTasks()}
+}
+async function taskClear(){
+  S.tasks=S.tasks.filter(t=>!t.done);drawTasks();
+  const {error}=await sb.from('tasks').delete().eq('done',true);
+  if(error){toast('تعذر المسح');loadTasks()}else toast('تم مسح المهام المنجزة');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='tk_t'){e.preventDefault();taskAdd()}});
 /* ---------- التحديث التلقائي ---------- */
 let newV=null;
 function showUpd(){
@@ -705,14 +770,15 @@ async function calcSave(){
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
-  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة']}[S.tab];
+  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والإعلانات','آخر ما صدر من الإدارة'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar" data-act="account">${esc((S.me?.full_name||'م').trim().charAt(0))}</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
-  $('#fab').classList.toggle('hidden',!(S.loaded&&(S.tab!=='ann'||isAdmin())));
+  $('#fab').classList.toggle('hidden',!(S.loaded&&S.tab!=='tasks'&&(S.tab!=='ann'||isAdmin())));
 }
 function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.created_by!==myId()&&tsMs(a.created_at)>seen).length}
 function renderNav(){
   const u=S.tab==='ann'?0:unread();const cu=S.works.reduce((n,w)=>n+unreadOf(w.id).length,0);
-  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['ann','التعاميم']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
+  const tn=tkOpen().length;
+  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['tasks','مهامي'],['ann','التعاميم']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='tasks'&&tn?`<span class="badge" style="background:var(--navy)">${tn}</span>`:''}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
 }
 function installTip(){
   const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches;
@@ -726,6 +792,7 @@ function renderView(){
   const n=S.err?`<div class="notice">${esc(S.err)}</div>`:'';
   if(S.tab==='home')v.innerHTML=n+installTip()+vHome();
   else if(S.tab==='works'){if($('#q')&&$('#list')&&$('#errn')){$('#errn').innerHTML=n;drawList()}else{v.innerHTML='<div id="errn">'+n+'</div>'+vWorksShell();drawList()}}
+  else if(S.tab==='tasks'){if($('#tk_t')&&$('#tlist'))drawTasks();else{v.innerHTML=n+vTasksShell();drawTasks()}}
   else v.innerHTML=n+vAnn();
 }
 function bar(p,st,cls=''){return`<div class="bar ${cls||(st==='done'?'done':st==='late'?'late':'')}"><i style="width:${p}%"></i></div>`}
@@ -751,7 +818,7 @@ function vHome(){
   const doneM=all.filter(w=>statusOf(w)==='done'&&doneAt(w)>=ms.getTime()).length;
   const avg=active.length?Math.round(active.reduce((a,w)=>a+pctOf(w),0)/active.length):0;
   let h=`<div class="card"><div class="row" style="align-items:flex-end"><b>متوسط إنجاز الأعمال القائمة</b><span class="big">${avg}%</span></div>${bar(avg,'','gold')}<div class="nums"><div class="num"><b style="color:var(--blue2)">${active.length}</b><span>أعمال قائمة</span></div><div class="num"><b style="color:var(--red)">${late.length}</b><span>متأخرة</span></div><div class="num"><b style="color:var(--green)">${doneM}</b><span>أُنجزت هذا الشهر</span></div></div></div>`;
-  h+=chatAlerts()+alerts()+bkNote();
+  h+=chatAlerts()+alerts()+tasksNote()+bkNote();
   const imp=S.anns.find(a=>a.important&&Date.now()-tsMs(a.created_at)<14*864e5)||S.anns[0];
   if(imp)h+=`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`;
   const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t).sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,4);
@@ -931,9 +998,11 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel]');if(!t)return;
   const d=t.dataset;
   if(d.men){menAdd(d.men);return}
+  if(d.tdone){taskToggle(d.tdone);return}
+  if(d.tdel){arm(t,'تأكيد','حذف',()=>taskDel(d.tdel));return}
   if(d.restore){trashRestore(d.restore);return}
   if(d.purge){arm(t,'تأكيد الحذف النهائي','حذف نهائي',()=>trashPurge(d.purge));return}
   if(d.ctype){S.sheet.type=d.ctype;drawCalc();return}
@@ -993,6 +1062,9 @@ document.addEventListener('click',async e=>{
     case'editwork':if(w)openWorkForm(w.id);break;
     case'delwork':if(w)arm(t,'اضغط مرة ثانية للتأكيد','حذف',async()=>{const id=w.id;closeSheet();const {error}=await sb.from('works').update({deleted_at:new Date().toISOString(),deleted_by:myId()}).eq('id',id);toast(error?'تعذر الحذف':'نُقل العمل إلى سلة المحذوفات (يُسترجع خلال 30 يومًا)');load()});break;
     case'trash':openTrash();break;
+    case'taskadd':taskAdd();break;
+    case'tasktoggle':S.tkDone=!S.tkDone;drawTasks();break;
+    case'taskclear':arm(t,'اضغط مرة ثانية للتأكيد','مسح المهام المنجزة',()=>taskClear());break;
     case'update':applyUpdate(true);break;
     case'logoutall':arm(t,'اضغط مرة ثانية للتأكيد','خروج من كل الأجهزة',async()=>{closeSheet();await pushDrop();await sb.auth.signOut({scope:'global'})});break;
   }
