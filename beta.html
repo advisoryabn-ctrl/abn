@@ -209,7 +209,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.17.4';
+const APP_V='2026.11.18.1';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -238,11 +238,14 @@ const ACTS={
   done:[['الشيخ أرجع التقرير','revise','returned']],
   rejected:[['إعادة فتح العرض','reopen','']]
 };
-const FDATES=[['received','استلام القضية'],['offer','إرسال العرض'],['accepted','قبول العميل'],['paid','الدفع'],['expert','تعيين الخبير'],['report','إرسال التقرير الأولي'],['objected','الاعتراض'],['returned','إرجاع الشيخ للتقرير'],['final','إرسال التقرير النهائي'],['done','الاكتمال']];
+const FDATES=[['received','استلام القضية'],['offer','إرسال العرض'],['accepted','قبول العميل'],['paid','الدفع'],['expert','تعيين الخبير'],['report','إرسال التقرير الأولي'],['objected','الاعتراض'],['returned','إرجاع الشيخ للتقرير'],['final','إرسال التقرير النهائي'],['done','الاكتمال'],['approved','اعتماد الشيخ للتقرير']];
+const apv=w=>!!(w.flow&&(w.flow.dates||{}).approved);
+const apWait=w=>isFlow(w)&&eff(w).stage==='done'&&!apv(w);
+function actsFor(w){const b=eff(w).base;let a=ACTS[b]||[];if(b==='done'&&!apv(w))a=[['✅ الشيخ اعتمد التقرير','done','approved'],...a];return a}
 const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
 const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false,annSeg:'ann',gchat:null};
+const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false,ap:'all',annSeg:'ann',gchat:null};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -685,7 +688,7 @@ function pushSync(){
 }
 async function pushDrop(){try{const sub=await pushSub();if(sub){await sb.rpc('drop_push',{p_endpoint:sub.endpoint});await sub.unsubscribe()}}catch(e){}}
 /* ---------- الخط الزمني للقضية ---------- */
-const ML={received:'الاستلام',offer:'إرسال العرض',accepted:'قبول العميل',paid:'الدفع',expert:'تعيين الخبير',report:'التقرير الأولي',objected:'الاعتراض',returned:'إرجاع الشيخ',final:'التقرير النهائي',done:'الاكتمال'};
+const ML={received:'الاستلام',offer:'إرسال العرض',accepted:'قبول العميل',paid:'الدفع',expert:'تعيين الخبير',report:'التقرير الأولي',objected:'الاعتراض',returned:'إرجاع الشيخ',final:'التقرير النهائي',done:'الاكتمال',approved:'اعتماد الشيخ'};
 const MK=Object.keys(ML);
 const RULE={'offer>accepted':d=>addWork(d,5),'accepted>paid':d=>addWork(d,10),'paid>expert':d=>addWork(d,10),'expert>report':d=>addDays(d,30),'objected>final':d=>addWork(d,10),'returned>final':d=>addWork(d,10)};
 const TLPAL=['#13406F','#1F5E9E','#4C86C6','#7FA9D8','#5B7A99','#2E6F9E','#0B2545'];
@@ -849,7 +852,7 @@ function renderView(){
 function bar(p,st,cls=''){return`<div class="bar ${cls||(st==='done'?'done':st==='late'?'late':'')}"><i style="width:${p}%"></i></div>`}
 function wcard(w){
   const p=pctOf(w),s=statusOf(w);let foot;
-  if(isFlow(w)){const e=eff(w);foot=`<span><b>${esc(FL[e.stage])}</b></span><span>${esc(dlText(e))}</span>`}
+  if(isFlow(w)){const e=eff(w);foot=`<span><b>${esc(FL[e.stage])}</b></span><span>${e.stage==='done'?(apv(w)?'معتمدة من الشيخ ✓':'بانتظار اعتماد الشيخ'):esc(dlText(e))}</span>`}
   else{const st=w.steps||[];foot=`<span><b>${p}%</b> · ${st.filter(x=>x.done).length}/${st.length} مراحل</span><span>${w.due?'التسليم '+fmtD(w.due):'بدون موعد'}</span>`}
   return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}${unreadOf(w.id).length?` <span class="cbadge">💬 ${unreadOf(w.id).length}</span>`:''}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta">${foot}</div></div>`;
 }
@@ -886,9 +889,12 @@ function vWorksShell(){
 }
 function drawList(){
   const el=$('#list');if(!el)return;const q=S.q.trim().toLowerCase();const order={late:0,prog:1,new:2,done:3,rej:4};
-  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej':s===S.st)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q))})
+  const dn=S.st==='done'?S.works.filter(w=>statusOf(w)==='done'):[];const nW=dn.filter(apWait).length,nA=dn.filter(w=>isFlow(w)&&apv(w)).length;
+  const sub=S.st==='done'&&(nW||nA)?`<div class="chips" style="margin-bottom:8px">${[['all','كل المكتملة'],['wait','بانتظار اعتماد الشيخ ('+nW+')'],['ok','معتمدة ('+nA+')']].map(([k,l])=>`<button class="chip ${S.ap===k?'on':''}" data-ap="${k}">${l}</button>`).join('')}</div>`:'';
+  const apOk=w=>S.st!=='done'||S.ap==='all'||(S.ap==='wait'?apWait(w):isFlow(w)&&apv(w));
+  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej':s===S.st)&&apOk(w)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q))})
     .sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(statusOf(a)==='done'?doneAt(b)-doneAt(a):keyDate(a).localeCompare(keyDate(b))));
-  el.innerHTML=(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
+  el.innerHTML=sub+(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
 }
 function vAnn(){
   if(!S.anns.length)return`<div class="card empty">ما فيه تعاميم بعد.${isAdmin()?'<br>اضغط <b>+</b> لنشر أول تعميم.':''}</div>`;
@@ -913,13 +919,13 @@ function flowBody(w){
   const e=eff(w),d=w.flow.dates||{},idx=FLOW.findIndex(x=>x[0]===e.base),p=pctOf(w),s=statusOf(w);
   const open=e.stage!=='done'&&e.stage!=='rejected';
   const track=FLOW.slice(0,7).map(([k,l],i)=>{const ok=e.base==='done'||(e.base!=='rejected'&&i<idx)||(e.stage==='done');const cur=!ok&&k===e.base;return`<li class="${ok?'ok':cur?'cur':''}"><i>${ok?'✓':''}</i>${esc(l)}</li>`}).join('');
-  const acts=(ACTS[e.base]||[]).map((a,i)=>`<button class="abtn ${a[1]==='rejected'?'no':i>0||a[1]==='reopen'||e.base==='done'?'alt':''}" data-fact="${i}">${esc(a[0])}</button>`).join('');
+  const acts=actsFor(w).map((a,i)=>`<button class="abtn ${a[1]==='rejected'?'no':a[2]==='approved'?'':i>0||a[1]==='reopen'||e.base==='done'?'alt':''}" data-fact="${i}">${esc(a[0])}</button>`).join('');
   const dates=FDATES.map(([k,l])=>{const v=k==='received'?w.received:d[k];const miss=open&&NEED[k]&&idx>=NEED[k]&&!v;return`<div class="drow ${miss?'miss':''}"><label>${esc(l)}${miss?' — ناقص':''}</label><input type="date" data-fdate="${k}" value="${esc(v)}"><button type="button" class="dclr" data-clr="1">مسح</button></div>`}).join('');
-  return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
+  return`<div class="row" style="justify-content:flex-start;flex-wrap:wrap"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span>${e.stage==='done'?(apv(w)?'<span class="pill st-done">معتمد من الشيخ ✓</span>':'<span class="pill st-new">بانتظار اعتماد الشيخ</span>'):''}</div>
   <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
   <div class="info"><div><small>رقم القضية</small><b>${esc(w.ref||'—')}</b></div><div><small>الرقم المرجعي</small><b dir="ltr">${esc(w.code||'—')}</b></div><div><small>${w.hearing&&w.hearing<todayISO()?'آخر جلسة (فاتت)':'الجلسة القادمة'}</small><b>${fmtD(w.hearing)}</b></div><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div></div>
   <div class="card"><div class="row" style="align-items:flex-end"><b>${esc(FL[e.stage])}</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}
-  <div class="meta">${esc(dlText(e))}${open&&e.dl?' · آخر موعد '+fmtD(e.dl):''}${e.stage==='rejected'&&w.flow.reason?' · '+esc(w.flow.reason):''}</div>
+  <div class="meta">${esc(dlText(e))}${e.stage==='done'?(apv(w)?' · اعتمده الشيخ '+fmtD(d.approved):' · بانتظار اعتماد الشيخ'):''}${open&&e.dl?' · آخر موعد '+fmtD(e.dl):''}${e.stage==='rejected'&&w.flow.reason?' · '+esc(w.flow.reason):''}</div>
   <ul class="track">${track}</ul>
   <div class="fld" style="margin-top:10px"><label class="lbl">تاريخ الإجراء</label><input type="date" id="adate" class="input" value="${todayISO()}"></div>${acts}</div>
   ${timeline(w)}
@@ -1097,9 +1103,10 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap]');if(!t)return;
   const d=t.dataset;
   if(d.men){menAdd(d.men);return}
+  if(d.ap){S.ap=d.ap;drawList();return}
   if(d.aseg){setSeg(d.aseg);return}
   if(d.remdel){arm(t,'تأكيد','حذف',()=>remDel(+d.remdel));return}
   if(d.tdone){taskToggle(d.tdone);return}
@@ -1114,26 +1121,27 @@ document.addEventListener('click',async e=>{
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
   if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
   if(d.tab){S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();return}
-  if(d.st){S.st=d.st;document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
+  if(d.st){S.st=d.st;S.ap='all';document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
   if(d.open){openDetail(d.open);return}
   if(d.ftype){S.sheet.type=d.ftype;S.sheet.steps=[...stepsFor(d.ftype)];drawForm();return}
   if(d.rmdraft!==undefined){S.sheet.steps.splice(+d.rmdraft,1);drawForm();return}
   if(d.delann){arm(t,'تأكيد الحذف','حذف',async()=>{const {error}=await sb.from('announcements').delete().eq('id',d.delann);toast(error?'تعذر الحذف':'تم الحذف');load()});return}
   const w=S.sheet?.kind==='detail'?S.works.find(x=>x.id===S.sheet.id):null;
   if(d.fact!==undefined&&w&&isFlow(w)){
-    const a=(ACTS[eff(w).base]||[])[+d.fact];if(!a)return;
+    const a=actsFor(w)[+d.fact];if(!a)return;
     if(Date.now()-factT<900)return;factT=Date.now();
     const dt=$('#adate')?.value||todayISO();
+    if(a[2]==='approved'){const dn=(w.flow.dates||{}).done;if(dn&&dt<dn){toast('تاريخ الاعتماد قبل تاريخ الاكتمال ('+fmtD(dn)+')');return}}
     if(a[1]!=='reopen'){const pk=PREVK[w.flow.stage],pv=pk==='received'?w.received:(w.flow.dates||{})[pk];if(pv&&dt<pv){toast('تاريخ الإجراء قبل تاريخ المرحلة السابقة ('+fmtD(pv)+')');return}}const f=JSON.parse(JSON.stringify(w.flow));f.dates=f.dates||{};
     if(a[1]==='reopen'){f.stage=f.prev||'accept';delete f.prev;delete f.reason;delete f.dates.rejected;f.reopened=dt}
     else{
       if(a[1]==='rejected'){f.prev=f.stage;f.reason=a[0]}
       f.dates[a[2]]=dt;
-      if(a[1]==='done')f.dates.done=dt;
-      if(a[1]==='revise')delete f.dates.done;
+      if(a[1]==='done'&&a[2]!=='approved')f.dates.done=dt;
+      if(a[1]==='revise'){delete f.dates.done;delete f.dates.approved}
       f.stage=a[1];
     }
-    if(await updateWork(w.id,{flow:f}))toast(a[1]==='reopen'?'تمت إعادة فتح العرض':'انتقلت إلى: '+FL[f.stage]);
+    if(await updateWork(w.id,a[2]==='approved'?{flow:f,hearing:null}:{flow:f}))toast(a[2]==='approved'?'تم تسجيل اعتماد الشيخ للتقرير':a[1]==='reopen'?'تمت إعادة فتح العرض':'انتقلت إلى: '+FL[f.stage]);
     return;
   }
   if(d.step!==undefined&&w){const steps=(w.steps||[]).map(x=>({...x}));const s=steps[+d.step];if(!s)return;s.done=!s.done;if(s.done){s.at=new Date().toISOString();s.by=myId()}else{delete s.at;delete s.by}local(w.id,withCompletion(w,steps));if(steps.every(x=>x.done))toast('اكتمل العمل 100%');rpc('set_step',{p_work:w.id,p_idx:+d.step,p_done:s.done});return}
