@@ -209,7 +209,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.22.1';
+const APP_V='2026.11.23.1';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -729,7 +729,7 @@ async function backup(){
     const wk=id=>works.find(w=>w.id===id)||{};
     const dt=v=>{if(!v)return'';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleString('sv-SE',{timeZone:'Asia/Riyadh'}).slice(0,16)};
     const STT={new:'جديد',prog:'جاري',late:'متأخر',done:'منجز',rej:'مرفوض',can:'ملغي'};
-    const W=works.map(w=>{const fl=isFlow(w),st=Array.isArray(w.steps)?w.steps:[];const r={'الرمز':w.code||'','النوع':(TYPES[w.type]||{}).label||w.type,'العنوان':w.title||'','العميل':w.client||'','المرجع':w.ref||'','الحالة':STT[statusOf(w)]||'','المرحلة':fl?FL[eff(w).stage]||'':st.length?st.filter(x=>x.done).length+' من '+st.length:'','موعد التسليم':w.due||'','الجلسة':w.hearing||'','سبب الإلغاء':w.cancel_reason||''};
+    const W=works.map(w=>{const fl=isFlow(w),st=Array.isArray(w.steps)?w.steps:[];const r={'الرمز':w.code||'','النوع':(TYPES[w.type]||{}).label||w.type,'العنوان':w.title||'','العميل':w.client||'','المرجع':w.ref||'','الحالة':STT[statusOf(w)]||'','المرحلة':fl?FL[eff(w).stage]||'':st.length?st.filter(x=>x.done).length+' من '+st.length:'','موعد التسليم':w.due||'','الجلسة':w.hearing||'','سبب الإلغاء':w.cancel_reason||'','مهمة الخبير':(w.brief&&w.brief.task)||'','مبلغ النزاع':w.brief&&w.brief.amount!=null?w.brief.amount:''};
       FDATES.forEach(([k,l])=>{r[l]=(w.flow&&w.flow.dates&&w.flow.dates[k])||(k==='received'?w.received||'':'')});
       r['سبب الرفض']=(w.flow&&w.flow.reason)||'';r['تاريخ الإنجاز']=w.completed_at?String(w.completed_at).slice(0,10):'';r['أضافه']=nm(w.created_by);r['تاريخ الإضافة']=dt(w.created_at);r['في سلة المحذوفات منذ']=dt(w.deleted_at);r['flow']=w.flow?JSON.stringify(w.flow):'';r['steps']=st.length?JSON.stringify(st):'';r['id']=w.id;return r});
     const ST=[],N=[];
@@ -780,8 +780,8 @@ function calcEdit(){
   if(f.edit){const c=priceCfg();f.draft={};Object.keys(PFLD).forEach(t=>f.draft[t]=pfor(c,t))}
   drawCalc();
 }
-function openCalc(){
-  S.sheet={kind:'calc',type:'case',size:'s',parties:2,years:1,count:1,cx:false,urg:false,edit:false};
+function openCalc(pre){
+  S.sheet={kind:'calc',type:'case',size:'s',parties:2,years:1,count:1,cx:false,urg:false,edit:false,...(pre||{})};
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">حاسبة التسعير <span class="pill tag">تجريبي</span></h2><button class="x" data-act="close">×</button></div><div id="cBody"></div>`);
   drawCalc();
 }
@@ -794,7 +794,7 @@ function drawCalc(){
   }
   const chip=(on,attr,l)=>`<button class="chip ${on?'on':''}" ${attr}>${l}</button>`;
   const num=(k,l,min)=>`<div class="drow"><label>${l}</label><input type="number" inputmode="numeric" min="${min}" step="1" data-cnum="${k}" value="${f[k]}"></div>`;
-  let h=`<label class="lbl">نوع العمل</label><div class="wrap">${['case','report','fs','tax'].map(k=>chip(f.type===k,`data-ctype="${k}"`,TYPES[k].label)).join('')}</div>`;
+  let h=(f.from?`<div class="notice">الأرقام مأخوذة من بطاقة دراسة: <b>${esc(f.fromT||'')}</b>${f.fromWhy?'<br>فعّلنا «عمل معقّد» لأن البطاقة فيها '+esc(f.fromWhy)+'. تقدر تطفيه.':''}<br>مبلغ النزاع ما يدخل في الحساب.</div>`:'')+`<label class="lbl">نوع العمل</label><div class="wrap">${['case','report','fs','tax'].map(k=>chip(f.type===k,`data-ctype="${k}"`,TYPES[k].label)).join('')}</div>`;
   if(f.type!=='tax')h+=`<label class="lbl">حجم المستندات</label><div class="wrap">${[['s','صغير'],['m','متوسط'],['b','كبير']].map(([k,l])=>chip(f.size===k,`data-csize="${k}"`,l)).join('')}</div>`;
   let nums='';
   if(f.type==='case')nums+=num('parties','عدد الأطراف',2)+num('years','عدد السنوات المالية محل النزاع',1);
@@ -803,7 +803,7 @@ function drawCalc(){
   if(nums)h+=`<div class="card" style="padding:4px 14px">${nums}</div>`;
   h+=`<div class="wrap">${f.type!=='tax'?chip(f.cx,'data-ctog="cx"','عمل معقّد'):''}${chip(f.urg,'data-ctog="urg"','مستعجل')}</div><div id="cRes"></div>
   <div class="meta" style="line-height:1.7;margin-bottom:12px">تقدير أولي للاستئناس فقط. مبني على أسعار أساس ومعاملات تحددونها أنتم، وليس على تحليل للأعمال السابقة.</div>
-  ${isAdmin()?'<button class="abtn alt" data-act="calcedit">تعديل أسعار الأساس والمعاملات</button>':''}`;
+  ${f.from?'<button class="abtn alt" data-act="calcback">رجوع للقضية</button>':''}${isAdmin()?'<button class="abtn alt" data-act="calcedit">تعديل أسعار الأساس والمعاملات</button>':''}`;
   el.innerHTML=h;drawRes();
 }
 function drawRes(){
@@ -857,6 +857,57 @@ function wcard(w){
   else if(isFlow(w)){const e=eff(w);foot=`<span><b>${esc(FL[e.stage])}</b></span><span>${e.stage==='done'?(apv(w)?'معتمدة من الشيخ ✓':'بانتظار اعتماد الشيخ'):esc(dlText(e))}</span>`}
   else{const st=w.steps||[];foot=`<span><b>${p}%</b> · ${st.filter(x=>x.done).length}/${st.length} مراحل</span><span>${w.due?'التسليم '+fmtD(w.due):'بدون موعد'}</span>`}
   return`<div class="wcard" data-open="${esc(w.id)}"><div class="row"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div><h3>${esc(w.title)}${unreadOf(w.id).length?` <span class="cbadge">💬 ${unreadOf(w.id).length}</span>`:''}</h3><div class="meta">${esc(w.client||'—')}${w.ref?' · '+esc(w.ref):''}</div>${bar(p,s)}<div class="row meta">${foot}</div></div>`;
+}
+/* ---------- بطاقة دراسة الطلب ومهمة الخبير ---------- */
+const BSZ={s:'صغير',m:'متوسط',b:'كبير'};
+const BTOG=[['visit','فيه وقوف على الموقع'],['eng','فيه جزء غير محاسبي (هندسي/تقدير أعمال)'],['cx','عمل معقّد'],['urg','مستعجل']];
+function briefRead(){
+  const v=S.sheet&&S.sheet.bd;if(!v||!$('#b_task'))return;
+  v.task=$('#b_task').value;v.note=$('#b_note').value;v.amount=$('#b_amount').value;v.parties=$('#b_parties').value;v.years=$('#b_years').value;
+}
+function briefHtml(w){
+  const b=w.brief&&typeof w.brief==='object'?w.brief:null,sh=S.sheet||{};
+  if(sh.bedit){
+    const v=sh.bd,num=(id,l,val,min,ph)=>`<div class="drow"><label>${l}</label><input type="number" inputmode="decimal" min="${min}" step="any" id="${id}" value="${esc(val)}" placeholder="${ph}"></div>`;
+    return`<div class="card"><b>بطاقة دراسة الطلب</b>
+    <div class="fld" style="margin-top:10px"><label class="lbl">مهمة الخبير (كما كتبها القاضي)</label><textarea class="input" id="b_task" rows="6" maxlength="3000" placeholder="الصق نص المهمة من منصة خبرة">${esc(v.task)}</textarea></div>
+    <div class="card" style="padding:4px 14px">${num('b_amount','مبلغ النزاع (ريال)',v.amount,0,'—')}${num('b_parties','عدد الأطراف',v.parties,1,'2')}${num('b_years','عدد السنوات المالية محل النزاع',v.years,1,'1')}</div>
+    <label class="lbl">حجم المستندات والحوالات</label><div class="wrap">${Object.keys(BSZ).map(k=>`<button class="chip ${v.docs===k?'on':''}" data-bsz="${k}">${BSZ[k]}</button>`).join('')}</div>
+    <div class="wrap">${BTOG.map(([k,l])=>`<button class="chip ${v[k]?'on':''}" data-btog="${k}">${l}</button>`).join('')}</div>
+    <div class="fld"><label class="lbl">ملاحظات الدراسة</label><textarea class="input" id="b_note" rows="2" maxlength="500" placeholder="مثال: نقدّم أو لا، ووش يحتاج">${esc(v.note)}</textarea></div>
+    <button class="primary" data-act="briefsave">حفظ البطاقة</button><button class="abtn alt" data-act="briefx">تراجع</button></div>`;
+  }
+  if(!b)return w.cancelled_at?'':'<button class="abtn alt" data-act="briefedit" style="margin-bottom:12px">+ مهمة الخبير وبطاقة دراسة الطلب</button>';
+  const cell=(l,x)=>`<div><small>${l}</small><b>${x}</b></div>`,tags=BTOG.filter(([k])=>b[k]).map(([,l])=>`<span class="pill type">${l}</span>`).join(' ');
+  const info=(b.amount!=null?cell('مبلغ النزاع',nf(b.amount)+' ريال'):'')+(b.docs?cell('حجم المستندات',BSZ[b.docs]||'—'):'')+(b.parties?cell('عدد الأطراف',b.parties):'')+(b.years?cell('السنوات المالية',b.years):'');
+  return`<div class="card"><div class="row"><b>مهمة الخبير من القاضي</b><button class="chip" data-act="briefedit">تعديل</button></div>
+  <div style="white-space:pre-wrap;line-height:1.9;margin:8px 0 4px;max-height:240px;overflow:auto">${b.task?esc(b.task):'<span class="meta">ما انكتبت المهمة.</span>'}</div>
+  ${info?`<div class="info">${info}</div>`:''}${tags?`<div class="wrap" style="margin-bottom:8px">${tags}</div>`:''}
+  ${b.note?`<div class="meta" style="white-space:pre-wrap;line-height:1.7;margin-bottom:8px">ملاحظات: ${esc(b.note)}</div>`:''}
+  ${PFLD[w.type]?'<button class="abtn alt" data-act="briefcalc">احسب السعر المقترح من البطاقة</button>':''}
+  <div class="meta" style="margin-top:6px">${b.by?'آخر تحديث: '+esc(nm(b.by))+' · '+fmtD(String(b.at||'').slice(0,10)):''}</div></div>`;
+}
+function briefEdit(w){
+  const b=w.brief&&typeof w.brief==='object'?w.brief:{};
+  S.sheet.bedit=true;
+  S.sheet.bd={task:b.task||'',note:b.note||'',amount:b.amount!=null?String(b.amount):'',parties:b.parties?String(b.parties):'',years:b.years?String(b.years):'',docs:b.docs||'',visit:!!b.visit,eng:!!b.eng,cx:!!b.cx,urg:!!b.urg};
+  const el=$('#dBrief');if(el)el.innerHTML=briefHtml(w);
+}
+async function briefSave(w){
+  briefRead();const v=S.sheet.bd,n=x=>{const y=parseFloat(x);return isFinite(y)&&y>=0?y:null};
+  const b={};
+  const task=v.task.trim().slice(0,3000),note=v.note.trim().slice(0,500),am=n(v.amount),pa=n(v.parties),ye=n(v.years);
+  if(task)b.task=task;if(note)b.note=note;if(am!=null&&v.amount!=='')b.amount=Math.round(am*100)/100;
+  if(pa)b.parties=Math.max(1,Math.round(pa));if(ye)b.years=Math.max(1,Math.round(ye));
+  if(BSZ[v.docs])b.docs=v.docs;BTOG.forEach(([k])=>{if(v[k])b[k]=true});
+  const empty=!Object.keys(b).length;
+  if(empty&&!w.brief){S.sheet.bedit=false;refreshDetail();return}
+  if(!empty){b.by=myId();b.at=new Date().toISOString()}
+  if(await updateWork(w.id,{brief:empty?null:b})){if(S.sheet&&S.sheet.kind==='detail'){S.sheet.bedit=false;refreshDetail()}toast(empty?'تم حذف البطاقة':'تم حفظ البطاقة')}
+}
+function briefCalc(w){
+  const b=w.brief||{};
+  openCalc({type:PFLD[w.type]?w.type:'case',size:BSZ[b.docs]?b.docs:'s',parties:Math.max(2,b.parties||2),years:Math.max(1,b.years||1),cx:!!(b.cx||b.visit||b.eng),urg:!!b.urg,from:w.id,fromT:w.title,fromWhy:[b.visit&&'وقوف على الموقع',b.eng&&'جزء غير محاسبي'].filter(Boolean).join(' و')});
 }
 /* ---------- إلغاء العمل ---------- */
 const CREASONS=['العميل تراجع','قررنا ما نكمل','تعارض مصالح','أخرى'];
@@ -951,6 +1002,7 @@ function flowBody(w){
   return`<div class="row" style="justify-content:flex-start;flex-wrap:wrap"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span>${e.stage==='done'?(apv(w)?'<span class="pill st-done">معتمد من الشيخ ✓</span>':'<span class="pill st-new">بانتظار اعتماد الشيخ</span>'):''}</div>
   <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
   <div class="info"><div><small>رقم القضية</small><b>${esc(w.ref||'—')}</b></div><div><small>الرقم المرجعي</small><b dir="ltr">${esc(w.code||'—')}</b></div><div><small>${w.hearing&&w.hearing<todayISO()?'آخر جلسة (فاتت)':'الجلسة القادمة'}</small><b>${fmtD(w.hearing)}</b></div><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div></div>
+  <div id="dBrief"></div>
   <div class="card"><div class="row" style="align-items:flex-end"><b>${esc(FL[e.stage])}</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}
   <div class="meta">${w.cancelled_at?'ملغي':esc(dlText(e))}${!w.cancelled_at&&e.stage==='done'?(apv(w)?' · اعتمده الشيخ '+fmtD(d.approved):' · بانتظار اعتماد الشيخ'):''}${open&&e.dl?' · آخر موعد '+fmtD(e.dl):''}${e.stage==='rejected'&&w.flow.reason?' · '+esc(w.flow.reason):''}</div>
   <ul class="track">${track}</ul>
@@ -963,13 +1015,16 @@ function stepsBody(w){
   return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
   <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
   <div class="info"><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div><div><small>موعد التسليم</small><b>${fmtD(w.due)}</b></div><div><small>رقم القضية / المرجع</small><b>${esc(w.ref||'—')}</b></div><div><small>${w.code?'الرقم المرجعي':'الجلسة القادمة'}</small><b dir="${w.code?'ltr':'rtl'}">${w.code?esc(w.code):fmtD(w.hearing)}</b></div></div>
+  <div id="dBrief"></div>
   <div class="card" style="margin:0"><div class="row" style="align-items:flex-end"><b>نسبة الإنجاز</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}<div class="meta">${st.filter(x=>x.done).length} من ${st.length} مراحل مكتملة${w.completed_at?' · اكتمل '+fmtD(toISO(parseTS(w.completed_at))):''}</div>
   <ul class="steps">${st.map((x,i)=>`<li class="${x.done?'d':''}"><button class="chk ${x.done?'on':''}" data-step="${i}">${x.done?IC.check:''}</button><span class="t"><span>${esc(x.t)}</span>${x.done&&x.at?`<span class="by">${x.by?esc(nm(x.by))+' · ':''}${fmtDT(x.at)}</span>`:''}</span><button class="rm" data-rmstep="${i}">×</button></li>`).join('')||'<li class="meta">ما فيه مراحل.</li>'}</ul></div>`;
 }
 function refreshDetail(){
   const w=S.works.find(x=>x.id===S.sheet?.id);const b=$('#dBody');if(!b)return;if(!w){closeSheet();return}
   const keep=$('#adate')?.value;
+  const ob=S.sheet.bedit?$('#dBrief'):null;
   b.innerHTML=cancelBanner(w)+(isFlow(w)?flowBody(w):stepsBody(w));
+  const nb=$('#dBrief');if(nb){if(ob)nb.replaceWith(ob);else{S.sheet.bedit=false;nb.innerHTML=briefHtml(w)}}
   if(keep&&$('#adate'))$('#adate').value=keep;
   const da=$('#dActs');if(da){const cr=$('#c_r')?.value;da.innerHTML=dActsHtml(w);if(cr&&$('#c_r'))$('#c_r').value=cr}
   const n=$('#dNotes');const notes=[...(w.notes||[])].reverse();
@@ -1131,10 +1186,11 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog]');if(!t)return;
   const d=t.dataset;
   if(d.men){menAdd(d.men);return}
   if(d.ap){S.ap=d.ap;drawList();return}
+  if((d.bsz||d.btog)&&S.sheet?.bedit){briefRead();const v=S.sheet.bd;if(d.bsz)v.docs=v.docs===d.bsz?'':d.bsz;else v[d.btog]=!v[d.btog];const el=$('#dBrief'),w0=S.works.find(x=>x.id===S.sheet.id);if(el&&w0)el.innerHTML=briefHtml(w0);return}
   if(d.creason&&S.sheet?.kind==='detail'){S.sheet.cr=d.creason;refreshDetail();return}
   if(d.aseg){setSeg(d.aseg);return}
   if(d.remdel){arm(t,'تأكيد','حذف',()=>remDel(+d.remdel));return}
@@ -1187,6 +1243,11 @@ document.addEventListener('click',async e=>{
     case'calc':openCalc();break;
     case'calcedit':calcEdit();break;
     case'calcsave':calcSave();break;
+    case'calcback':{const id=S.sheet&&S.sheet.from;if(id)openDetail(id);break}
+    case'briefedit':if(w)briefEdit(w);break;
+    case'briefx':if(w){S.sheet.bedit=false;refreshDetail()}break;
+    case'briefsave':if(w)briefSave(w);break;
+    case'briefcalc':if(w)briefCalc(w);break;
     case'pushon':pushOn();break;
     case'pushoff':pushOff();break;
     case'tpl':openTpl();break;
