@@ -313,7 +313,7 @@ function actsFor(w){const b=eff(w).base;let a=ACTS[b]||[];if(b==='done'&&!apv(w)
 const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
 const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'},can:{l:'ملغي',c:'st-can'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false,ap:'all',annSeg:'ann',gchat:null};
+const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false,ap:'all',ty:'all',yrs:{},annSeg:'ann',gchat:null};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -893,7 +893,7 @@ function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();i
 function renderTop(){
   document.body.dataset.pg=S.tab;
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
-  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والمحادثة','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
+  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التواصل','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="qkb" data-act="qk" aria-label="بحث سريع">🔍 بحث سريع <kbd>Ctrl K</kbd></button><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&S.tab!=='tasks'&&(S.tab!=='ann'||(isAdmin()&&S.annSeg==='ann'))));
 }
@@ -901,7 +901,7 @@ function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.
 function renderNav(){
   const u=(S.tab==='ann'&&S.annSeg==='ann'?0:unread())+(gOn()?0:unreadG().length);const cu=S.works.reduce((n,w)=>n+unreadOf(w.id).length,0);
   const tn=tkOpen().length;
-  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['tasks','مهامي'],['ann','التعاميم والمحادثة']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='tasks'&&tn?`<span class="badge" style="background:var(--navy)">${tn}</span>`:''}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
+  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['tasks','مهامي'],['ann','التواصل']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='tasks'&&tn?`<span class="badge" style="background:var(--navy)">${tn}</span>`:''}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
 }
 function installTip(){
   const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches;
@@ -1013,17 +1013,34 @@ function alerts(){
   });
   return a.length?`<div class="card alertc">${a.slice(0,8).map(([l,w])=>`<div class="al" data-open="${esc(w.id)}"><b>${esc(l)}</b><span>${esc(w.title)}</span></div>`).join('')}</div>`:'';
 }
+function alertRows(){
+  const t=todayISO(),tm=addDays(t,1),a=[];
+  S.works.forEach(w=>{
+    if(w.cancelled_at)return;
+    if(w.hearing===t)a.push({l:'🔔 جلسة اليوم',w,now:true});else if(w.hearing===tm)a.push({l:'🔔 جلسة غدًا',w,now:false});
+    if(isFlow(w)){const e=eff(w);if(e.dl&&e.stage!=='done'&&e.stage!=='rejected'){const n=dayDiff(t,e.dl);if(n<0)a.push({l:e.wait?'✅ انتهت مهلة الاعتراض — أكّد إكمال القضية':'⏰ تجاوزت المهلة — '+FL[e.stage],w,now:true});else if(n<=2)a.push({l:'⏰ '+rem(e.dl)+' — '+FL[e.stage],w,now:n===0})}}
+    else if(w.due&&statusOf(w)!=='done'){const n=dayDiff(t,w.due);if(n<0)a.push({l:'⏰ تأخر موعد التسليم',w,now:true});else if(n<=2)a.push({l:'⏰ التسليم: '+rem(w.due),w,now:n===0})}
+  });
+  return a;
+}
 function vHome(){
   const all=S.works,active=all.filter(w=>!['done','rej','can'].includes(statusOf(w))),late=active.filter(w=>statusOf(w)==='late');
   const ms=new Date();ms.setDate(1);ms.setHours(0,0,0,0);
   const doneM=all.filter(w=>statusOf(w)==='done'&&doneAt(w)>=ms.getTime()).length;
   const avg=active.length?Math.round(active.reduce((a,w)=>a+pctOf(w),0)/active.length):0;
   let h=`<div class="card"><div class="row" style="align-items:flex-end"><b>متوسط إنجاز الأعمال القائمة</b><span class="big">${avg}%</span></div>${bar(avg,'','gold')}<div class="nums"><div class="num"><b style="color:var(--blue2)">${active.length}</b><span>أعمال قائمة</span></div><div class="num"><b style="color:var(--red)">${late.length}</b><span>متأخرة</span></div><div class="num"><b style="color:var(--green)">${doneM}</b><span>أُنجزت هذا الشهر</span></div></div></div>`;
-  h+=gAlert()+chatAlerts()+alerts()+tasksNote()+bkNote();
+  const t=todayISO(),tm=addDays(t,1),wk=addDays(t,7),ar=alertRows();
+  const box=rows=>rows.length?`<div class="card alertc">${rows.slice(0,8).map(x=>`<div class="al" data-open="${esc(x.w.id)}"><b>${esc(x.l)}</b><span>${esc(x.w.title)}</span></div>`).join('')}</div>`:'';
+  const hear=hs=>hs.length?`<div class="card" style="padding:4px 14px">`+hs.map(w=>{const[,m,d]=w.hearing.split('-').map(Number);return`<div class="hear" data-open="${esc(w.id)}"><div class="cal"><b>${d}</b><small>${MONTHS[m-1]}</small></div><div style="flex:1;min-width:0"><b style="display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.title)}</b><span class="meta">${esc(w.ref||w.client||'')}</span></div></div>`}).join('')+`</div>`:'';
+  const sec=(title,body,dot)=>body?`<div class="sec"><h2>${dot?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};margin-inline-end:8px"></span>`:''}${title}</h2></div>${body}`:'';
+  const hsAll=all.filter(w=>w.hearing&&w.hearing>tm&&!w.cancelled_at).sort((a,b)=>a.hearing.localeCompare(b.hearing));
+  const kd=tkDueN();
+  h+=sec('يحتاج إجراء اليوم',box(ar.filter(x=>x.now))+(kd?tasksNote():'')+bkNote(),'var(--red)');
+  h+=sec('هذا الأسبوع',box(ar.filter(x=>!x.now))+hear(hsAll.filter(w=>w.hearing<=wk))+(kd?'':tasksNote()),'var(--gold)');
   const imp=S.anns.find(a=>a.important&&Date.now()-tsMs(a.created_at)<14*864e5)||S.anns[0];
-  if(imp)h+=`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`;
-  const t=todayISO();const hs=all.filter(w=>w.hearing&&w.hearing>=t&&!w.cancelled_at).sort((a,b)=>a.hearing.localeCompare(b.hearing)).slice(0,4);
-  if(hs.length)h+=`<div class="sec"><h2>الجلسات القادمة</h2></div><div class="card" style="padding:4px 14px">`+hs.map(w=>{const[,m,d]=w.hearing.split('-').map(Number);return`<div class="hear" data-open="${esc(w.id)}"><div class="cal"><b>${d}</b><small>${MONTHS[m-1]}</small></div><div style="flex:1;min-width:0"><b style="display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.title)}</b><span class="meta">${esc(w.ref||w.client||'')}${w.hearing===t?' · <b style="color:var(--red)">اليوم</b>':''}</span></div></div>`}).join('')+`</div>`;
+  const annc=imp?`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`:'';
+  const later=hsAll.filter(w=>w.hearing>wk).slice(0,4);
+  h+=sec('للعلم',gAlert()+chatAlerts()+annc+(later.length?`<div class="meta" style="margin:4px 4px 8px">جلسات لاحقة</div>`+hear(later):''),'var(--blue2)');
   const ord={late:0,prog:1,new:2};
   const top=[...active].sort((a,b)=>ord[statusOf(a)]-ord[statusOf(b)]||keyDate(a).localeCompare(keyDate(b)));
   h+=`<div class="sec"><h2>أعمال تحتاج متابعة</h2><button data-tab="works">عرض الكل</button></div>`;
@@ -1031,17 +1048,27 @@ function vHome(){
   return h;
 }
 function vWorksShell(){
-  const chips=[['all','الكل'],['prog','قيد التنفيذ'],['late','متأخرة'],['new','لم تبدأ'],['done','مكتملة'],['rej','العروض المرفوضة'],['can','الملغاة']];
+  const chips=[['all','الكل'],['prog','قيد التنفيذ'],['late','متأخرة'],['new','لم تبدأ'],['wait','بانتظار الاعتماد'],['done','مكتملة'],['rej','العروض المرفوضة'],['can','الملغاة']];
   return`<input class="input" id="q" placeholder="ابحث بالعنوان أو العميل أو النوع أو رقم القضية" value="${esc(S.q)}" style="margin-bottom:10px"><div class="chips">${chips.map(([k,l])=>`<button class="chip ${S.st===k?'on':''}" data-st="${k}">${l}</button>`).join('')}</div><div id="list"></div>`;
 }
 function drawList(){
   const el=$('#list');if(!el)return;const q=S.q.trim().toLowerCase();const order={late:0,prog:1,new:2,done:3,rej:4,can:5};
-  const dn=S.st==='done'?S.works.filter(w=>statusOf(w)==='done'):[];const nW=dn.filter(apWait).length,nA=dn.filter(w=>isFlow(w)&&apv(w)).length;
-  const sub=S.st==='done'&&(nW||nA)?`<div class="chips" style="margin-bottom:8px">${[['all','كل المكتملة'],['wait','بانتظار اعتماد الشيخ ('+nW+')'],['ok','معتمدة ('+nA+')']].map(([k,l])=>`<button class="chip ${S.ap===k?'on':''}" data-ap="${k}">${l}</button>`).join('')}</div>`:'';
-  const apOk=w=>S.st!=='done'||S.ap==='all'||(S.ap==='wait'?apWait(w):isFlow(w)&&apv(w));
-  const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej'&&s!=='can':s===S.st)&&apOk(w)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q))})
+  const types=[...new Set(S.works.map(w=>w.type))];if(S.ty!=='all'&&!types.includes(S.ty))S.ty='all';
+  const nW=S.works.filter(w=>statusOf(w)==='done'&&apWait(w)).length,wc=document.querySelector('.chip[data-st=wait]');
+  if(wc)wc.textContent='بانتظار الاعتماد'+(nW?' ('+nW+')':'');
+  const stOk=w=>{const st=statusOf(w);if(S.st==='all')return st!=='rej'&&st!=='can';if(S.st==='wait')return st==='done'&&apWait(w);if(S.st==='done')return st==='done'&&!apWait(w);return st===S.st};
+  const sub=types.length>1?`<div class="chips" style="margin-bottom:8px">${[['all','كل الأنواع'],...types.map(k=>[k,typeL(k)])].map(([k,l])=>`<button class="chip ${S.ty===k?'on':''}" data-ty="${esc(k)}">${esc(l)}</button>`).join('')}</div>`:'';
+  const ws=S.works.filter(w=>stOk(w)&&(S.ty==='all'||w.type===S.ty)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q)))
     .sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(statusOf(a)==='done'?doneAt(b)-doneAt(a):keyDate(a).localeCompare(keyDate(b))));
-  el.innerHTML=sub+(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
+  let body;
+  if(!ws.length)body='<div class="card empty">ما فيه نتائج.</div>';
+  else if(S.st==='done'&&!q){
+    const yr=w=>{const d=doneAt(w);return d?String(new Date(d).getFullYear()):'بدون تاريخ'},g={};
+    ws.forEach(w=>{(g[yr(w)]=g[yr(w)]||[]).push(w)});
+    const ys=Object.keys(g).sort((a,b)=>b.localeCompare(a)),cur=String(new Date().getFullYear()),openY=y=>S.yrs[y]!==undefined?S.yrs[y]:(y===cur||(y===ys[0]&&!g[cur]));
+    body=ys.map(y=>openY(y)?`<div class="sec" style="margin:14px 4px 8px"><h2>${esc(y)} <span class="meta" style="font-weight:400">· ${g[y].length} عمل</span></h2>${ys.length>1?`<button data-yr="${esc(y)}">إخفاء</button>`:''}</div>`+g[y].map(wcard).join(''):`<button class="abtn alt" data-yr="${esc(y)}" style="margin-bottom:10px">عرض مكتملة ${esc(y)} (${g[y].length})</button>`).join('');
+  }else body=ws.map(wcard).join('');
+  el.innerHTML=sub+(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+body;
   markSel();
 }
 function vAnn(){
@@ -1295,10 +1322,11 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr]');if(!t)return;
   const d=t.dataset;
   if(d.men){menAdd(d.men);return}
-  if(d.ap){S.ap=d.ap;drawList();return}
+  if(d.ty){S.ty=d.ty;drawList();return}
+  if(d.yr){const b=t.classList.contains('abtn');S.yrs[d.yr]=b;drawList();return}
   if((d.bsz||d.btog)&&S.sheet?.bedit){briefRead();const v=S.sheet.bd;if(d.bsz)v.docs=v.docs===d.bsz?'':d.bsz;else v[d.btog]=!v[d.btog];const el=$('#dBrief'),w0=S.works.find(x=>x.id===S.sheet.id);if(el&&w0)el.innerHTML=briefHtml(w0);return}
   if(d.creason&&S.sheet?.kind==='detail'){S.sheet.cr=d.creason;refreshDetail();return}
   if(d.aseg){setSeg(d.aseg);return}
@@ -1315,7 +1343,7 @@ document.addEventListener('click',async e=>{
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
   if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
   if(d.tab){if(S.sheet)closeSheet();S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();return}
-  if(d.st){S.st=d.st;S.ap='all';document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
+  if(d.st){S.st=d.st;S.yrs={};document.querySelectorAll('.chips .chip[data-st]').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));if(t.scrollIntoView)t.scrollIntoView({inline:'center',block:'nearest'});drawList();return}
   if(d.open){openDetail(d.open);return}
   if(d.ftype){S.sheet.type=d.ftype;S.sheet.steps=[...stepsFor(d.ftype)];drawForm();return}
   if(d.rmdraft!==undefined){S.sheet.steps.splice(+d.rmdraft,1);drawForm();return}
