@@ -123,6 +123,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .note small{font-size:11px;color:var(--mute)}
 .acts{display:flex;gap:8px;margin-top:22px}
 .acts button{flex:1;padding:13px;border-radius:12px;font-weight:700}
+.xa button{padding:12px 4px;font-size:13.5px;white-space:nowrap}
 .btn2{background:#fff;border:1px solid var(--line)!important;color:var(--navy)}
 .btnd{background:#FDECEA;color:var(--red)}
 .btnd.arm{background:var(--red);color:#fff}
@@ -212,7 +213,7 @@ body[data-pg=home] main>.wcard{grid-column:auto}
 #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:0 14px;align-items:start}
 #list>*{grid-column:1/-1}
 #list>.wcard{grid-column:auto}
-body[data-pg=tasks] main,body[data-pg=ann] main{max-width:860px}
+body[data-pg=tasks] main,body[data-pg=ann] main,body[data-pg=exp] main{max-width:860px}
 .chips{flex-wrap:wrap;overflow:visible}
 #q{max-width:560px}
 .wcard{transition:box-shadow .15s,transform .15s}
@@ -277,7 +278,7 @@ body[data-pg=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.24.4';
+const APP_V='2026.11.24.5';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -314,6 +315,7 @@ const NEED={offer:1,accepted:2,paid:3,expert:4,report:5};
 const ST={new:{l:'لم يبدأ',c:'st-new'},prog:{l:'قيد التنفيذ',c:'st-prog'},late:{l:'متأخر',c:'st-late'},done:{l:'مكتمل',c:'st-done'},rej:{l:'مرفوض',c:'st-rej'},can:{l:'ملغي',c:'st-can'}};
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 const S={session:null,me:null,works:[],anns:[],profiles:[],loaded:false,err:null,tab:'home',st:'all',q:'',sheet:null,act:null,msgs:[],chat:null,tpl:{},tasks:[],tkDone:false,ap:'all',ty:'all',yrs:{},annSeg:'ann',gchat:null};
+let UPQ=[],UPC=null,XL=null;const EX={ym:null,rows:null,err:false};
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -374,6 +376,7 @@ const IC={
   works:'<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
   ann:'<svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>',
   tasks:'<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/></svg>',
+  exp:'<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg>',
   check:'<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg>'
 };
 
@@ -385,7 +388,7 @@ $('#lf').addEventListener('submit',async e=>{
   if(error)toast(!error.status||/fetch|network/i.test(error.message||'')?'تعذر الاتصال، تأكد من الإنترنت':'تأكد من الإيميل وكلمة المرور');
 });
 sb.auth.onAuthStateChange((_e,session)=>{const was=!!S.session;S.session=session;if(!!session!==was||!S.booted){S.booted=true;session?startApp():showLogin()}});
-function showLogin(){S.tasks=[];S.gchat=null;$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
+function showLogin(){S.tasks=[];S.gchat=null;EX.rows=null;UPQ=[];if(UPC)UPC.stop=true;$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
 
 /* ---------- البيانات ---------- */
 let channel=null,loadTimer=null;
@@ -397,7 +400,8 @@ async function load(){
   ]);
   if(!w.error){S.trash=w.data.filter(x=>x.deleted_at);S.works=w.data.filter(x=>!x.deleted_at)}if(!a.error)S.anns=a.data;if(!p.error)S.profiles=p.data;
   S.err=(w.error||a.error||p.error)?'تعذر تحميل البيانات، تأكد من الاتصال':null;
-  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();loadTasks();openPending();
+  S.me=S.profiles.find(x=>x.id===myId())||null;S.loaded=true;renderAll();loadMsgs();loadTpl();loadTasks();openPending();if(S.tab==='exp')loadExp();
+  if(isAdmin()&&Date.now()-(+ls('abn_gc')||0)>7*864e5){ls('abn_gc',String(Date.now()));fGc()}
   if(S.sheet?.kind==='detail')loadAct(S.sheet.id);
 }
 const loadSoon=()=>{clearTimeout(loadTimer);loadTimer=setTimeout(load,300)};
@@ -639,7 +643,7 @@ async function trashRestore(id){
 async function trashPurge(id){
   const {error}=await sb.from('works').delete().eq('id',id);
   if(error){toast('تعذر الحذف');return}
-  toast('تم الحذف النهائي');await load();drawTrash();
+  toast('تم الحذف النهائي');fGc();await load();drawTrash();
 }
 async function allWorks(){
   let out=[],i=0;
@@ -893,7 +897,7 @@ function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();i
 function renderTop(){
   document.body.dataset.pg=S.tab;
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
-  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التواصل','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
+  const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التواصل','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك'],exp:['العهد','سجّل العهدة وأرفق فاتورتها']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="qkb" data-act="qk" aria-label="بحث سريع">🔍 بحث سريع <kbd>Ctrl K</kbd></button><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&S.tab!=='tasks'&&(S.tab!=='ann'||(isAdmin()&&S.annSeg==='ann'))));
 }
@@ -901,7 +905,7 @@ function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.
 function renderNav(){
   const u=(S.tab==='ann'&&S.annSeg==='ann'?0:unread())+(gOn()?0:unreadG().length);const cu=S.works.reduce((n,w)=>n+unreadOf(w.id).length,0);
   const tn=tkOpen().length;
-  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['tasks','مهامي'],['ann','التواصل']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='tasks'&&tn?`<span class="badge" style="background:var(--navy)">${tn}</span>`:''}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
+  $('#tabs').innerHTML=[['home','الرئيسية'],['works','الأعمال'],['tasks','مهامي'],['exp','العهد'],['ann','التواصل']].map(([k,l])=>`<button data-tab="${k}" class="${S.tab===k?'on':''}">${IC[k]}${l}${k==='tasks'&&tn?`<span class="badge" style="background:var(--navy)">${tn}</span>`:''}${k==='ann'&&u?`<span class="badge">${u}</span>`:''}${k==='works'&&cu?`<span class="badge">${cu}</span>`:''}</button>`).join('');
 }
 function installTip(){
   const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches;
@@ -916,6 +920,7 @@ function renderView(){
   if(S.tab==='home')v.innerHTML=n+installTip()+vHome();
   else if(S.tab==='works'){if($('#q')&&$('#list')&&$('#errn')){$('#errn').innerHTML=n;drawList()}else{v.innerHTML='<div id="errn">'+n+'</div>'+vWorksShell();drawList()}}
   else if(S.tab==='tasks'){if($('#tk_t')&&$('#tlist'))drawTasks();else{v.innerHTML=n+vTasksShell();drawTasks()}}
+  else if(S.tab==='exp'){if(!($('#expTop')&&$('#expList')))v.innerHTML=n+vExpShell();drawExp()}
   else if(S.annSeg==='chat'){if($('#gmsg')&&$('#gChat')){const sg=$('#asegs');if(sg)sg.innerHTML=annSegs();drawGChat(false)}else{v.innerHTML=n+'<div id="asegs">'+annSegs()+'</div>'+vGChat();drawGChat(true)}}
   else v.innerHTML=n+'<div id="asegs">'+annSegs()+'</div>'+vAnn();
 }
@@ -1122,11 +1127,12 @@ function openDetail(id){
   S.sheet={kind:'detail',id};
   openSheet(`<div class="row"><span></span><button class="x" data-act="close">×</button></div><div id="dBody"></div>
   ${fl?'':'<div class="inl"><input class="input" id="nstep" placeholder="أضف مرحلة جديدة" maxlength="80"><button class="sbtn" data-act="addstep">إضافة</button></div>'}
+  <div class="sec"><h2>الملفات</h2></div><div id="dFiles"></div>
   <div class="sec"><h2>المحادثة</h2></div><div id="dNotes"></div><div id="dChat" class="chat"></div>
   ${menRow()}<div class="inl"><textarea class="input" id="nmsg" rows="2" placeholder="اكتب رسالة…" maxlength="1000" style="resize:none"></textarea><button class="sbtn" data-act="sendmsg">إرسال</button></div>
   <div class="sec"><h2>سجل النشاط</h2></div><div id="dAct" class="card" style="padding:4px 14px"><div class="meta" style="padding:8px 0">جاري التحميل…</div></div>
   <div id="dActs"></div>`);
-  refreshDetail();loadAct(id);S.chat=null;loadChat(id);
+  refreshDetail();drawFiles();loadFiles(id);loadAct(id);S.chat=null;loadChat(id);
 }
 function flowBody(w){
   const e=eff(w),d=w.flow.dates||{},idx=FLOW.findIndex(x=>x[0]===e.base),p=pctOf(w),s=statusOf(w);
@@ -1236,7 +1242,214 @@ function openAccount(){
   <button class="abtn no" data-act="logoutall">خروج من كل الأجهزة</button>
   <div class="meta" style="text-align:center;margin-top:12px" dir="ltr">v${APP_V}</div>`);
 }
-/* ---------- التنبيهات الشهرية ---------- */
+/* ---------- الملفات (تنحفظ مشفّرة على استضافة الشركة) ---------- */
+const FILES_URL='https://abnadvisory.com/abnfiles/api.php',FMAX=500*1024*1024,FCH=2*1024*1024;
+const fSize=n=>{n=+n||0;return n<1024?n+' بايت':n<1048576?Math.round(n/1024)+' ك.ب':n<1073741824?(n/1048576).toFixed(n<10485760?1:0)+' م.ب':(n/1073741824).toFixed(2)+' ج.ب'};
+const hex32=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
+const FJ=b=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const wait=ms=>new Promise(z=>setTimeout(z,ms));
+async function fTok(){try{const {data}=await sb.auth.getSession();return data?.session?.access_token||''}catch(e){return''}}
+async function fApi(a,q,opt){
+  try{const r=await fetch(FILES_URL+'?a='+a+(q||''),{...(opt||{}),headers:{'X-Abn-Token':await fTok(),...((opt&&opt.headers)||{})}});let j={};try{j=await r.json()}catch(e){}return{status:r.status,j:j||{}}}
+  catch(e){return{status:0,j:{}}}
+}
+function upAdd(kind,ref,files,done){
+  let n=0;
+  for(const f of files){
+    if(!f.size){toast('الملف فاضي: '+f.name);continue}
+    if(f.size>FMAX){toast('الملف أكبر من 500 ميجا: '+f.name);continue}
+    UPQ.push({kind,ref,file:f,name:f.name,size:f.size,sent:0,done});n++;
+  }
+  if(n){upDraw();upNext()}
+  return n;
+}
+async function upNext(){
+  if(UPC||!UPQ.length)return;
+  const u=UPC=UPQ.shift();u.u=hex32();upDraw();
+  let ok=false;try{ok=await upRun(u)}catch(e){ok=false}
+  UPC=null;
+  if(ok)toast('تم رفع: '+u.name);else toast(u.stop?'تم إلغاء الرفع':(u.err||('تعذر رفع: '+u.name)));
+  if(u.done)try{u.done(ok,u)}catch(e){}
+  upDraw();upNext();
+}
+async function upRun(u){
+  let off=0,fails=0;
+  while(off<u.size){
+    if(u.stop)return false;
+    const r=await fApi('chunk','&u='+u.u+'&o='+off,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:u.file.slice(off,Math.min(off+FCH,u.size))});
+    if(r.status===200&&r.j.ok&&r.j.size>off){off=r.j.size;fails=0;u.sent=off;upDraw();continue}
+    if(r.status===401){u.err='انتهت الجلسة، سجّل دخولك من جديد';return false}
+    if(r.status===507){u.err='مساحة التخزين امتلأت، بلّغ المدير';return false}
+    if(r.status===413){u.err='الملف أكبر من الحد المسموح';return false}
+    if(r.status===409&&r.j.error==='offset'&&typeof r.j.size==='number'&&r.j.size!==off&&r.j.size<=u.size){off=r.j.size;u.sent=off;upDraw();continue}
+    if(++fails>6){u.err='انقطع الاتصال أثناء رفع: '+u.name;return false}
+    await wait(1500*fails);
+    const st=await fApi('stat','&u='+u.u);
+    if(st.status===200&&typeof st.j.size==='number'&&st.j.size<=u.size){off=st.j.size;u.sent=off;upDraw()}
+  }
+  if(u.stop)return false;
+  for(let i=0;i<3;i++){
+    const f=await fApi('finish','',FJ({u:u.u,kind:u.kind,ref:u.ref,name:u.name,size:u.size}));
+    if(f.status===200&&f.j.ok)return true;
+    if(f.status===404&&i>0)return true;
+    if(f.status===0){await wait(2000);continue}
+    u.err=f.status===502?'تعذر تسجيل الملف: ما عندك صلاحية أو العهدة مقيّدة':f.status===401?'انتهت الجلسة، سجّل دخولك من جديد':'تعذر إكمال رفع: '+u.name;return false;
+  }
+  u.err='انقطع الاتصال قبل إكمال رفع: '+u.name;return false;
+}
+function upHtml(kind,ref){
+  const cur=UPC&&UPC.kind===kind&&UPC.ref===ref?UPC:null,q=UPQ.filter(x=>x.kind===kind&&x.ref===ref);
+  const p=cur?Math.min(100,Math.floor(cur.sent/cur.size*100)):0;
+  return(cur?`<div class="drow"><label><b>جاري الرفع ${p}%</b> · <span style="word-break:break-word">${esc(cur.name)}</span><div class="bar" style="margin:6px 0 0"><i style="width:${p}%"></i></div></label><button class="dclr" data-act="upstop">إلغاء</button></div>`:'')+q.map(x=>`<div class="drow"><label class="meta">بالانتظار · ${esc(x.name)}</label></div>`).join('');
+}
+function upDraw(){
+  window.onbeforeunload=(UPC||UPQ.length)?e=>{e.preventDefault();e.returnValue='';return''}:null;
+  if(S.sheet?.kind==='detail')drawFiles();
+  if(S.tab==='exp'&&$('#expList'))drawExp();
+}
+function fPick(cb,accept){
+  document.querySelectorAll('input[data-fp]').forEach(x=>x.remove());
+  const i=document.createElement('input');i.type='file';i.multiple=true;i.dataset.fp='1';if(accept)i.accept=accept;i.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+  i.addEventListener('change',()=>{const fs=[...i.files];i.remove();if(fs.length)cb(fs)});
+  document.body.appendChild(i);i.click();
+}
+function fileRow(f,kind,canDel){
+  return`<div class="drow"><label><b style="word-break:break-word">${esc(f.name)}</b><div class="meta" style="margin-top:2px">${fSize(f.size)} · ${esc(nm(f.uploaded_by))} · ${fmtDT(f.created_at)}</div></label><button class="dclr" style="color:var(--navy)" data-fopen="${esc(f.id)}" data-fk="${kind}">فتح</button>${canDel?`<button class="dclr" data-fdel="${esc(f.id)}" data-fk="${kind}">حذف</button>`:''}</div>`;
+}
+async function loadFiles(id){
+  const {data,error}=await sb.from('work_files').select('*').eq('work_id',id).order('created_at',{ascending:true});
+  if(S.sheet?.kind!=='detail'||S.sheet.id!==id)return;
+  S.sheet.files=error?null:(data||[]);S.sheet.ferr=!!error;drawFiles();
+}
+function drawFiles(){
+  const el=$('#dFiles');if(!el||S.sheet?.kind!=='detail')return;
+  const fs=S.sheet.files;
+  const list=S.sheet.ferr?'<div class="notice" style="margin:10px 0 0">تعذر تحميل الملفات. تأكد من الاتصال.</div>':fs==null?'<div class="meta" style="padding:10px 0">جاري التحميل…</div>':fs.length?fs.map(f=>fileRow(f,'work',isAdmin())).join(''):'<div class="meta" style="padding:10px 0">ما فيه ملفات مرفوعة.</div>';
+  el.innerHTML=`<div class="card" style="padding:4px 14px 14px;margin:0">${list}${upHtml('work',S.sheet.id)}<button class="abtn alt" data-act="fpick">📎 رفع ملف</button><div class="meta" style="margin-top:8px;line-height:1.7">الملف ينحفظ مشفّر وبحجمه الأصلي بدون ضغط. الحد 500 ميجا للملف الواحد.</div></div>`;
+}
+async function fOpen(id,kind){
+  const win=window.open('about:blank','_blank');
+  const r=await fApi('link','',FJ({id,kind}));
+  const url=r.status===200&&typeof r.j.url==='string'&&r.j.url.indexOf('https://abnadvisory.com/')===0?r.j.url:'';
+  if(url){if(win)win.location.href=url;else location.href=url;return}
+  if(win)win.close();
+  toast(r.status===410?'الملف غير موجود على التخزين':r.status===404?'الملف محذوف':r.status===401?'انتهت الجلسة، سجّل دخولك من جديد':'تعذر فتح الملف، تأكد من الاتصال');
+}
+async function fDel(id,kind){
+  const r=await fApi('del','',FJ({id,kind}));
+  toast(r.status===200&&r.j.ok?'تم حذف الملف':r.status===403?'ما عندك صلاحية حذف هذا الملف':'تعذر الحذف');
+  if(kind==='work'){if(S.sheet?.kind==='detail')loadFiles(S.sheet.id)}else loadExp();
+}
+function fGc(){fApi('gc','',{method:'POST'})}
+/* ---------- العهد ---------- */
+const money=n=>(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const ymNow=()=>todayISO().slice(0,7);
+const ymLbl=ym=>{const[y,m]=ym.split('-').map(Number);return MONTHS[m-1]+' '+y};
+const ymAdd=(ym,d)=>{let[y,m]=ym.split('-').map(Number);m+=d;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return y+'-'+pad(m)};
+async function loadExp(){
+  if(!EX.ym)EX.ym=ymNow();
+  const ym=EX.ym;
+  const {data,error}=await sb.from('expenses').select('*,expense_files(*)').gte('spent_on',ym+'-01').lt('spent_on',ymAdd(ym,1)+'-01').order('spent_on',{ascending:false}).order('created_at',{ascending:false});
+  if(EX.ym!==ym)return;
+  EX.rows=error?null:(data||[]);EX.err=!!error;if(S.tab==='exp')drawExp();
+}
+function vExpShell(){return'<div id="expTop"></div><div id="expList"></div>'}
+function expCard(x){
+  const open=!x.posted_at,can=open&&(x.created_by===myId()||isAdmin()),fs=x.expense_files||[],busy=!!(UPC&&UPC.kind==='expense'&&UPC.ref===x.id)||UPQ.some(q=>q.kind==='expense'&&q.ref===x.id);
+  return`<div class="card"><div class="row"><b style="font-size:18px"><span dir="ltr">${money(x.amount)}</span> <small style="font-size:12px;color:var(--mute)">ر.س</small></b><span class="pill ${open?'st-new':'st-done'}">${open?'بانتظار القيد':'تم القيد ✓'}</span></div>
+  <div style="margin:8px 0 4px;line-height:1.7;word-break:break-word">${esc(x.description)}</div>
+  <div class="meta" style="line-height:1.9">${fmtD(x.spent_on)}${x.vendor?' · '+esc(x.vendor):''}${+x.vat?' · منها ضريبة <span dir="ltr">'+money(x.vat)+'</span>':''}<br>سجّلها ${esc(nm(x.created_by))}${x.posted_at?' · قيّدها '+esc(nm(x.posted_by))+' ('+fmtDT(x.posted_at)+')':''}</div>
+  ${fs.length?`<div style="margin-top:6px;border-top:1px solid var(--line)">${fs.map(f=>fileRow(f,'expense',can)).join('')}</div>`:busy?'':'<div class="meta" style="color:var(--red);margin-top:6px;font-weight:700">بدون فاتورة مرفقة</div>'}
+  ${upHtml('expense',x.id)}
+  ${can||isAdmin()?`<div class="acts xa" style="margin-top:12px">${can?`<button class="btn2" data-expatt="${esc(x.id)}">📎 إرفاق</button>`:''}${isAdmin()?`<button class="btn2" data-exppost="${esc(x.id)}">${open?'تم القيد':'إلغاء القيد'}</button>`:''}${can?`<button class="btnd" data-expdel="${esc(x.id)}">حذف العهدة</button>`:''}</div>`:''}</div>`;
+}
+function drawExp(){
+  const top=$('#expTop'),el=$('#expList');if(!top||!el)return;
+  if(!EX.ym)EX.ym=ymNow();
+  const r=EX.rows||[],tot=r.reduce((n,x)=>n+(+x.amount||0),0),vat=r.reduce((n,x)=>n+(+x.vat||0),0),wt=r.filter(x=>!x.posted_at).length,last=EX.ym>=ymNow();
+  top.innerHTML=`<div class="card" style="padding:10px 12px"><div class="row"><button class="dclr" style="color:var(--navy)" data-act="expprev">الشهر السابق</button><b>${ymLbl(EX.ym)}</b><button class="dclr" style="color:var(--navy);${last?'opacity:.35':''}" data-act="expnext" ${last?'disabled':''}>الشهر التالي</button></div></div>
+  <div class="info" style="margin-top:0"><div><small>إجمالي الشهر (شامل الضريبة)</small><b dir="ltr">${money(tot)}</b></div><div><small>منها ضريبة القيمة المضافة</small><b dir="ltr">${money(vat)}</b></div><div><small>عدد العهد</small><b>${r.length}</b></div><div><small>بانتظار القيد</small><b>${wt}</b></div></div>
+  ${r.length?'<button class="abtn alt" style="margin:0 0 12px" data-act="expxl">⬇️ تصدير عهد الشهر (Excel)</button>':''}`;
+  el.innerHTML=EX.err?'<div class="notice">تعذر تحميل العهد. تأكد من الاتصال.</div>':EX.rows==null?'<div class="card"><div class="spin"></div></div>':r.length?r.map(expCard).join(''):'<div class="card empty">ما فيه عهد مسجّلة في هذا الشهر.<br>اضغط زر الإضافة عشان تسجّل عهدة وترفق فاتورتها.</div>';
+}
+function expMonth(d){const n=ymAdd(EX.ym||ymNow(),d);if(n>ymNow())return;EX.ym=n;EX.rows=null;EX.err=false;drawExp();loadExp()}
+function openExpForm(){
+  S.sheet={kind:'expform',files:[],busy:false};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">عهدة جديدة</h2><button class="x" data-act="close">×</button></div>
+  <div class="f">
+  <div class="fld"><label class="lbl">المبلغ (شامل الضريبة)</label><input class="input" id="ex_a" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" dir="ltr"></div>
+  <div class="fld"><label class="lbl">منها ضريبة القيمة المضافة (اختياري)</label><input class="input" id="ex_v" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" dir="ltr"></div>
+  <div class="fld"><label class="lbl">تاريخ الصرف</label><input class="input" id="ex_d" type="date" value="${todayISO()}" max="${todayISO()}"></div>
+  <div class="fld"><label class="lbl">وش المصروف؟</label><input class="input" id="ex_t" maxlength="300" placeholder="مثال: اشتراك شهري في موقع"></div>
+  <div class="fld"><label class="lbl">الجهة / المورد (اختياري)</label><input class="input" id="ex_s" maxlength="120"></div>
+  <div class="lbl">الفاتورة (صورة أو PDF)</div><div id="ex_files"></div>
+  <button class="abtn alt" style="margin:0 0 6px" data-act="expfpick">📎 اختيار الفاتورة</button>
+  <div class="meta" style="margin-bottom:14px;line-height:1.7">تنحفظ بجودتها الأصلية بدون تصغير، وتقدر ترفقها بعدين.</div>
+  <button class="primary" data-act="expsave" id="ex_go">حفظ العهدة</button></div>`);
+}
+function drawExpFiles(){
+  const el=$('#ex_files');if(!el||S.sheet?.kind!=='expform')return;
+  el.innerHTML=S.sheet.files.length?`<div class="card" style="padding:2px 12px;margin-bottom:8px;box-shadow:none;border:1px solid var(--line)">${S.sheet.files.map((f,i)=>`<div class="drow"><label><span style="word-break:break-word">${esc(f.name)}</span><div class="meta">${fSize(f.size)}</div></label><button class="dclr" data-exfrm="${i}">إزالة</button></div>`).join('')}</div>`:'';
+}
+async function expSave(){
+  const sh=S.sheet;if(!sh||sh.kind!=='expform'||sh.busy)return;
+  const a=parseFloat($('#ex_a').value),v=parseFloat($('#ex_v').value||'0')||0,d=$('#ex_d').value,t=$('#ex_t').value.trim(),sp=$('#ex_s').value.trim();
+  if(!(a>0)){toast('اكتب المبلغ');return}
+  if(a>=10000000){toast('المبلغ كبير جداً، راجعه');return}
+  if(v<0||v>a){toast('الضريبة ما تكون أكبر من المبلغ');return}
+  if(!d){toast('اختر تاريخ الصرف');return}
+  if(d>todayISO()){toast('تاريخ الصرف في المستقبل');return}
+  if(!t){toast('اكتب وش المصروف');return}
+  sh.busy=true;const b=$('#ex_go');if(b){b.disabled=true;b.textContent='جاري الحفظ…'}
+  const {data,error}=await sb.from('expenses').insert({amount:Math.round(a*100)/100,vat:Math.round(v*100)/100,spent_on:d,description:t,vendor:sp||null}).select().single();
+  if(error||!data||!data.id){sh.busy=false;if(b){b.disabled=false;b.textContent='حفظ العهدة'}toast('تعذر حفظ العهدة، تأكد من الاتصال');return}
+  const fs=sh.files||[];
+  EX.ym=d.slice(0,7);EX.rows=null;EX.err=false;S.tab='exp';
+  closeSheet();renderAll();
+  toast(fs.length?'انحفظت العهدة، وجاري رفع الفاتورة…':'انحفظت العهدة بدون فاتورة');
+  await loadExp();
+  if(fs.length)upAdd('expense',data.id,fs,()=>loadExp());
+}
+async function expPost(id){
+  const x=(EX.rows||[]).find(r=>r.id===id);if(!x)return;const was=!!x.posted_at;
+  const {data,error}=await sb.from('expenses').update({posted_at:was?null:new Date().toISOString()}).eq('id',id).select();
+  toast(error||!data||!data.length?'تعذر التعديل':was?'تم إلغاء القيد':'تم تسجيلها كمقيّدة');loadExp();
+}
+async function expDel(id){
+  const x=(EX.rows||[]).find(r=>r.id===id);if(!x)return;
+  UPQ=UPQ.filter(q=>!(q.kind==='expense'&&q.ref===id));if(UPC&&UPC.kind==='expense'&&UPC.ref===id)UPC.stop=true;
+  for(const f of(x.expense_files||[]))await fApi('del','',FJ({id:f.id,kind:'expense'}));
+  const {data,error}=await sb.from('expenses').delete().eq('id',id).select();
+  toast(error||!data||!data.length?'تعذر الحذف':'تم حذف العهدة');loadExp();
+}
+async function expXl(){
+  const r=[...(EX.rows||[])];if(!r.length)return;
+  XL=null;S.sheet={kind:'expxl'};
+  openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">تصدير عهد ${ymLbl(EX.ym)}</h2><button class="x" data-act="close">×</button></div><div id="xlBody"><div class="notice">جاري تجهيز الملف…</div></div>`);
+  try{
+    await loadXLSX();
+    const pn=id=>(S.profiles.find(p=>p.id===id)||{}).full_name||'';
+    r.sort((a,b)=>a.spent_on<b.spent_on?-1:a.spent_on>b.spent_on?1:tsMs(a.created_at)-tsMs(b.created_at));
+    const r2=n=>Math.round(n*100)/100;
+    const rows=r.map((x,i)=>({'م':i+1,'التاريخ':x.spent_on,'البيان':x.description||'','الجهة':x.vendor||'','المبلغ شامل الضريبة':+x.amount||0,'ضريبة القيمة المضافة':+x.vat||0,'المبلغ قبل الضريبة':r2((+x.amount||0)-(+x.vat||0)),'الموظف':pn(x.created_by),'الحالة':x.posted_at?'تم القيد':'بانتظار القيد','قيّدها':pn(x.posted_by),'عدد المرفقات':(x.expense_files||[]).length}));
+    const tot=r2(r.reduce((n,x)=>n+(+x.amount||0),0)),vat=r2(r.reduce((n,x)=>n+(+x.vat||0),0));
+    rows.push({'م':'','التاريخ':'','البيان':'الإجمالي','الجهة':'','المبلغ شامل الضريبة':tot,'ضريبة القيمة المضافة':vat,'المبلغ قبل الضريبة':r2(tot-vat),'الموظف':'','الحالة':'','قيّدها':'','عدد المرفقات':''});
+    const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
+    const ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=Object.keys(rows[0]).map(k=>({wch:Math.min(45,Math.max(k.length+2,...rows.map(z=>String(z[k]==null?'':z[k]).length+2)))}));
+    XLSX.utils.book_append_sheet(wb,ws,'العهد');
+    const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    XL={name:'ABN-ohad-'+EX.ym+'.xlsx',blob:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})};
+    const el=$('#xlBody');
+    if(el&&S.sheet?.kind==='expxl')el.innerHTML=`<div class="card"><b>الملف جاهز</b><div class="meta" style="margin-top:6px;line-height:1.9">عدد العهد: <b>${r.length}</b> · الإجمالي: <b dir="ltr">${money(tot)}</b><br>الملف: <span dir="ltr">${XL.name}</span></div></div><button class="primary" data-act="expxlsave">حفظ الملف</button><div class="meta" style="line-height:1.7;margin-top:12px">الملف فيه بيانات العهد بس. صور الفواتير تفتحها من البرنامج.</div>`;
+  }catch(e){const el=$('#xlBody');if(el)el.innerHTML='<div class="notice">تعذر تجهيز الملف. تأكد من الاتصال وحاول مرة ثانية.</div>'}
+}
+async function expXlSave(){
+  if(!XL)return;
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
+  if(ios&&navigator.canShare){try{const f=new File([XL.blob],XL.name,{type:XL.blob.type});if(navigator.canShare({files:[f]})){await navigator.share({files:[f]});toast('تم حفظ الملف');return}}catch(e){if(e&&e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(XL.blob);a.download=XL.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);toast('تم حفظ الملف');
+}
+  /* ---------- التنبيهات الشهرية ---------- */
 const hrLbl=h=>{h=+h;if(isNaN(h))h=8;return h===0?'12 منتصف الليل':h<12?h+' الصبح':h===12?'12 الظهر':h<16?(h-12)+' الظهر':h<18?(h-12)+' العصر':(h-12)+' المساء'};
 function openRem(){
   S.sheet={kind:'rem',rows:null};
@@ -1321,9 +1534,15 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr],[data-fopen],[data-fdel],[data-expatt],[data-exppost],[data-expdel],[data-exfrm]');if(!t)return;
   const d=t.dataset;
-  if(d.men){menAdd(d.men);return}
+  if(d.fopen){fOpen(d.fopen,d.fk==='expense'?'expense':'work');return}
+  if(d.fdel){arm(t,'تأكيد','حذف',()=>fDel(d.fdel,d.fk==='expense'?'expense':'work'));return}
+  if(d.expatt){const id=d.expatt;fPick(fs=>upAdd('expense',id,fs,()=>loadExp()),'image/*,application/pdf');return}
+  if(d.exppost){const x=(EX.rows||[]).find(r=>r.id===d.exppost);if(x&&x.posted_at)arm(t,'تأكيد الإلغاء','إلغاء القيد',()=>expPost(d.exppost));else expPost(d.exppost);return}
+  if(d.expdel){arm(t,'تأكيد الحذف','حذف العهدة',()=>expDel(d.expdel));return}
+  if(d.exfrm!==undefined&&S.sheet?.kind==='expform'){S.sheet.files.splice(+d.exfrm,1);drawExpFiles();return}
+    if(d.men){menAdd(d.men);return}
   if(d.ty){S.ty=d.ty;drawList();return}
   if(d.yr){const b=t.classList.contains('abtn');S.yrs[d.yr]=b;drawList();return}
   if((d.bsz||d.btog)&&S.sheet?.bedit){briefRead();const v=S.sheet.bd;if(d.bsz)v.docs=v.docs===d.bsz?'':d.bsz;else v[d.btog]=!v[d.btog];const el=$('#dBrief'),w0=S.works.find(x=>x.id===S.sheet.id);if(el&&w0)el.innerHTML=briefHtml(w0);return}
@@ -1341,7 +1560,7 @@ document.addEventListener('click',async e=>{
   if(d.tplrm!==undefined){S.sheet.steps.splice(+d.tplrm,1);drawTpl();return}
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
   if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
-  if(d.tab){if(S.sheet)closeSheet();S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();return}
+  if(d.tab){if(S.sheet)closeSheet();S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();if(S.tab==='exp')loadExp();return}
   if(d.st){S.st=d.st;S.yrs={};document.querySelectorAll('.chips .chip[data-st]').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));if(t.scrollIntoView)t.scrollIntoView({inline:'center',block:'nearest'});drawList();return}
   if(d.open){openDetail(d.open);return}
   if(d.ftype){S.sheet.type=d.ftype;S.sheet.steps=[...stepsFor(d.ftype)];drawForm();return}
@@ -1369,7 +1588,15 @@ document.addEventListener('click',async e=>{
   if(d.rmstep!==undefined&&w){arm(t,'حذف؟','×',()=>{const i=+d.rmstep;local(w.id,withCompletion(w,w.steps.filter((_,k)=>k!==i)));rpc('remove_step',{p_work:w.id,p_idx:i})});return}
   switch(d.act){
     case'close':closeSheet();break;
-    case'account':openAccount();break;
+    case'fpick':if(w){const id=w.id;fPick(fs=>upAdd('work',id,fs,ok=>{if(ok&&S.sheet?.kind==='detail'&&S.sheet.id===id)loadFiles(id)}))}break;
+    case'upstop':if(UPC)UPC.stop=true;break;
+    case'expprev':expMonth(-1);break;
+    case'expnext':expMonth(1);break;
+    case'expfpick':if(S.sheet?.kind==='expform')fPick(fs=>{if(S.sheet?.kind!=='expform')return;for(const f of fs){if(!f.size)continue;if(f.size>FMAX){toast('الملف أكبر من 500 ميجا: '+f.name);continue}S.sheet.files.push(f)}drawExpFiles()},'image/*,application/pdf');break;
+    case'expsave':expSave();break;
+    case'expxl':expXl();break;
+    case'expxlsave':expXlSave();break;
+      case'account':openAccount();break;
     case'qk':qkOpen();break;
     case'log':openLog();break;
     case'pass':openPass();break;
@@ -1424,7 +1651,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;drawList()}if(e.target.id==='tlabel'&&S.sheet?.kind==='tpl')S.sheet.label=e.target.value;const g=e.target.dataset?.cfg;if(g&&S.sheet?.draft){const v=parseFloat(e.target.value);if(!isNaN(v)&&v>=0)S.sheet.draft[S.sheet.type][g]=v}const k=e.target.dataset?.cnum;if(k&&S.sheet?.kind==='calc'){const v=parseInt(e.target.value,10);S.sheet[k]=isNaN(v)?1:Math.max(1,Math.min(99,v));drawRes()}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='nstep'||e.target.id==='fstep')){e.preventDefault();document.querySelector(e.target.id==='nstep'?'[data-act=addstep]':'[data-act=fstep]').click()}});
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet()});
-$('#fab').addEventListener('click',()=>{S.tab==='ann'?openAnnForm():openWorkForm()});
+$('#fab').addEventListener('click',()=>{S.tab==='ann'?openAnnForm():S.tab==='exp'?openExpForm():openWorkForm()});
 </script>
 </body>
 </html>
