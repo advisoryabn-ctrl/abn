@@ -206,13 +206,13 @@ main{padding:0 40px;max-width:1240px}
 .sheet{align-items:center;padding:24px}
 .panel{max-width:780px;border-radius:22px;max-height:90vh;padding:14px 28px 28px}
 #toast{bottom:40px}
-body[data-tab=home] main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;align-items:start}
-body[data-tab=home] main>*{grid-column:1/-1}
-body[data-tab=home] main>.wcard{grid-column:auto}
+body[data-pg=home] main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;align-items:start}
+body[data-pg=home] main>*{grid-column:1/-1}
+body[data-pg=home] main>.wcard{grid-column:auto}
 #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:0 14px;align-items:start}
 #list>*{grid-column:1/-1}
 #list>.wcard{grid-column:auto}
-body[data-tab=tasks] main,body[data-tab=ann] main{max-width:860px}
+body[data-pg=tasks] main,body[data-pg=ann] main{max-width:860px}
 .chips{flex-wrap:wrap;overflow:visible}
 #q{max-width:560px}
 .wcard{transition:box-shadow .15s,transform .15s}
@@ -243,11 +243,11 @@ body[data-tab=tasks] main,body[data-tab=ann] main{max-width:860px}
 }
 @media(min-width:1200px){
 :root{--dw:min(700px,44vw)}
-body[data-tab=works][data-sheet=detail]{overflow:auto!important}
-body[data-tab=works][data-sheet=detail] #app{margin-left:var(--dw)}
-body[data-tab=works][data-sheet=detail] .sheet{inset:0 auto 0 0;width:var(--dw);background:none;padding:0;align-items:stretch;z-index:30}
-body[data-tab=works][data-sheet=detail] .panel{max-width:none;max-height:none;height:100vh;border-radius:0;animation:none;border-right:1px solid var(--line);box-shadow:6px 0 24px rgba(11,37,69,.07);padding-top:18px}
-body[data-tab=works][data-sheet=detail] .grab{display:none}
+body[data-pg=works][data-sheet=detail]{overflow:auto!important}
+body[data-pg=works][data-sheet=detail] #app{margin-left:var(--dw)}
+body[data-pg=works][data-sheet=detail] .sheet{inset:0 auto 0 0;width:var(--dw);background:none;padding:0;align-items:stretch;z-index:30}
+body[data-pg=works][data-sheet=detail] .panel{max-width:none;max-height:none;height:100vh;border-radius:0;animation:none;border-right:1px solid var(--line);box-shadow:6px 0 24px rgba(11,37,69,.07);padding-top:18px}
+body[data-pg=works][data-sheet=detail] .grab{display:none}
 }
 </style>
 </head>
@@ -277,7 +277,7 @@ body[data-tab=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.24.1';
+const APP_V='2026.11.24.2';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -891,7 +891,7 @@ async function calcSave(){
 /* ---------- العرض ---------- */
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
-  document.body.dataset.tab=S.tab;
+  document.body.dataset.pg=S.tab;
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
   const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والمحادثة','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="qkb" data-act="qk" aria-label="بحث سريع">🔍 بحث سريع <kbd>Ctrl K</kbd></button><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
