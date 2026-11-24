@@ -1034,10 +1034,9 @@ function vHome(){
   const hear=hs=>hs.length?`<div class="card" style="padding:4px 14px">`+hs.map(w=>{const[,m,d]=w.hearing.split('-').map(Number);return`<div class="hear" data-open="${esc(w.id)}"><div class="cal"><b>${d}</b><small>${MONTHS[m-1]}</small></div><div style="flex:1;min-width:0"><b style="display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.title)}</b><span class="meta">${esc(w.ref||w.client||'')}</span></div></div>`}).join('')+`</div>`:'';
   const sec=(title,body,dot)=>body?`<div class="sec"><h2>${dot?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};margin-inline-end:8px"></span>`:''}${title}</h2></div>${body}`:'';
   const hsAll=all.filter(w=>w.hearing&&w.hearing>tm&&!w.cancelled_at).sort((a,b)=>a.hearing.localeCompare(b.hearing));
-  const kd=tkDueN();
-  h+=sec('يحتاج إجراء اليوم',box(ar.filter(x=>x.now))+(kd?tasksNote():'')+bkNote(),'var(--red)');
-  h+=sec('هذا الأسبوع',box(ar.filter(x=>!x.now))+hear(hsAll.filter(w=>w.hearing<=wk))+(kd?'':tasksNote()),'var(--gold)');
-  const imp=S.anns.find(a=>a.important&&Date.now()-tsMs(a.created_at)<14*864e5)||S.anns[0];
+  h+=sec('يحتاج إجراء اليوم',box(ar.filter(x=>x.now))+bkNote(),'var(--red)');
+  h+=sec('هذا الأسبوع',box(ar.filter(x=>!x.now))+hear(hsAll.filter(w=>w.hearing<=wk)),'var(--gold)');
+  const fresh=S.anns.filter(a=>Date.now()-tsMs(a.created_at)<4*864e5).sort((a,b)=>tsMs(b.created_at)-tsMs(a.created_at)),imp=fresh.find(a=>a.important)||fresh[0];
   const annc=imp?`<div class="card goldEdge" data-tab="ann" style="cursor:pointer"><div class="k">${imp.important?'تعميم مهم':'آخر تعميم'} · ${fmtDT(imp.created_at)}</div><h3 style="font-size:15px;margin-top:4px">${esc(imp.title)}</h3><p class="meta" style="color:#3d4a63;margin-top:4px;line-height:1.7">${esc((imp.body||'').slice(0,150))}${(imp.body||'').length>150?'…':''}</p></div>`:'';
   const later=hsAll.filter(w=>w.hearing>wk).slice(0,4);
   h+=sec('للعلم',gAlert()+chatAlerts()+annc+(later.length?`<div class="meta" style="margin:4px 4px 8px">جلسات لاحقة</div>`+hear(later):''),'var(--blue2)');
