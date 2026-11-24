@@ -181,6 +181,45 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .tlr{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
 .tlr i{flex:none;width:10px;height:10px;border-radius:3px}.tlr span{flex:1}
 .tlr em{font-style:normal;font-size:11px;color:var(--red);font-weight:700}
+
+/* ---------- شاشة الكمبيوتر ---------- */
+@media(min-width:1000px){
+body{background:#EEF1F6}
+#app{max-width:none;margin:0 252px 0 0;padding:0 0 48px}
+.top{padding:26px 40px 66px}
+.top .brand>.logo,.top .brand>div{display:none}
+.top .brand{min-height:36px}
+.hello{margin-top:6px}
+.hello h1{font-size:26px}
+.hello p{font-size:13.5px}
+main{padding:0 40px;max-width:1240px}
+.tabs{top:0;bottom:0;right:0;left:auto;transform:none;width:252px;max-width:none;flex-direction:column;justify-content:flex-start;gap:4px;border-top:0;border-left:1px solid var(--line);padding:104px 14px 20px}
+.tabs::before{content:'ABN';position:absolute;top:30px;right:24px;font-weight:800;font-size:26px;line-height:1;color:var(--navy);letter-spacing:1px}
+.tabs::after{content:'for professional advisory';position:absolute;top:62px;right:24px;font-size:11.5px;color:var(--mute);direction:ltr}
+.tabs button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;font-size:14.5px;padding:12px 14px;border-radius:12px;text-align:right;cursor:pointer}
+.tabs button:hover{background:#F3F5F9}
+.tabs button.on{background:rgba(201,162,74,.14)}
+.tabs .badge{position:static;margin-inline-start:auto}
+.fab{left:auto;right:24px;bottom:28px;width:204px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;z-index:21;box-shadow:0 6px 16px rgba(201,162,74,.35)}
+.fab::after{content:'إضافة';font-weight:700;font-size:15px;color:var(--navy)}
+.fab svg{width:22px;height:22px}
+.sheet{align-items:center;padding:24px}
+.panel{max-width:780px;border-radius:22px;max-height:90vh;padding:14px 28px 28px}
+#toast{bottom:40px}
+body[data-tab=home] main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;align-items:start}
+body[data-tab=home] main>*{grid-column:1/-1}
+body[data-tab=home] main>.wcard{grid-column:auto}
+#list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:0 14px;align-items:start}
+#list>*{grid-column:1/-1}
+#list>.wcard{grid-column:auto}
+body[data-tab=tasks] main,body[data-tab=ann] main{max-width:860px}
+.chips{flex-wrap:wrap;overflow:visible}
+#q{max-width:560px}
+.wcard{transition:box-shadow .15s,transform .15s}
+.wcard:hover{box-shadow:0 2px 4px rgba(11,37,69,.06),0 10px 24px rgba(11,37,69,.10);transform:translateY(-1px)}
+.chip,.abtn,.btn2,.btnd,.primary,.sbtn{cursor:pointer}
+#login .lbox{max-width:420px;margin:0 auto;width:100%}
+}
 </style>
 </head>
 <body>
@@ -823,6 +862,7 @@ async function calcSave(){
 /* ---------- العرض ---------- */
 function renderAll(){if(!S.session)return;renderTop();renderNav();renderView();if(S.sheet?.kind==='detail')refreshDetail()}
 function renderTop(){
+  document.body.dataset.tab=S.tab;
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
   const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والمحادثة','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
   $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
