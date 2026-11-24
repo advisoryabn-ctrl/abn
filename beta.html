@@ -220,6 +220,35 @@ body[data-tab=tasks] main,body[data-tab=ann] main{max-width:860px}
 .chip,.abtn,.btn2,.btnd,.primary,.sbtn{cursor:pointer}
 #login .lbox{max-width:420px;margin:0 auto;width:100%}
 }
+
+/* ---------- بحث سريع ---------- */
+.qkb{display:none}
+#qk{position:fixed;inset:0;z-index:70;background:rgba(11,37,69,.45);display:flex;justify-content:center;align-items:flex-start;padding:12vh 16px 0}
+.qkbox{background:#fff;border-radius:18px;width:100%;max-width:640px;padding:14px;box-shadow:0 20px 50px rgba(11,37,69,.3)}
+#qkr{margin-top:8px;max-height:54vh;overflow:auto}
+.qkrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer}
+.qkrow b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qkrow.on,.qkrow:hover{background:#F3F5F9}
+.qkh{padding:8px 4px 0;border-top:1px solid var(--line);margin-top:8px}
+@media(min-width:1000px){
+.top{display:flex;align-items:center;gap:16px;padding:18px 40px 58px}
+.top .brand{flex:1;order:2;min-height:0}
+.hello{order:1;margin:0}
+.hello h1{font-size:22px}
+.qkb{display:inline-flex;align-items:center;gap:8px;margin-inline-start:auto;height:36px;padding:0 14px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#DCE5F2;font-size:13px;cursor:pointer}
+.qkb:hover{background:rgba(255,255,255,.18)}
+.qkb kbd{font:600 11px/1 system-ui,sans-serif;background:rgba(255,255,255,.14);padding:3px 6px;border-radius:5px;direction:ltr}
+.top .brand .avatar{margin-inline-start:10px;cursor:pointer}
+.wcard.sel{outline:2px solid var(--gold);outline-offset:-2px}
+}
+@media(min-width:1200px){
+:root{--dw:min(700px,44vw)}
+body[data-tab=works][data-sheet=detail]{overflow:auto!important}
+body[data-tab=works][data-sheet=detail] #app{margin-left:var(--dw)}
+body[data-tab=works][data-sheet=detail] .sheet{inset:0 auto 0 0;width:var(--dw);background:none;padding:0;align-items:stretch;z-index:30}
+body[data-tab=works][data-sheet=detail] .panel{max-width:none;max-height:none;height:100vh;border-radius:0;animation:none;border-right:1px solid var(--line);box-shadow:6px 0 24px rgba(11,37,69,.07);padding-top:18px}
+body[data-tab=works][data-sheet=detail] .grab{display:none}
+}
 </style>
 </head>
 <body>
@@ -865,7 +894,7 @@ function renderTop(){
   document.body.dataset.tab=S.tab;
   const h=new Date().getHours();const first=(S.me?.full_name||'').split(' ')[0];
   const head={home:[(h<12?'صباح الخير':'مساء الخير')+(first?'، '+(S.me?.title?S.me.title+' ':'')+first:''),fmtD(todayISO())],works:['الأعمال والقضايا','تابع إنجاز كل عملية بمراحلها'],ann:['التعاميم والمحادثة','تعاميم الإدارة ومحادثة عامة لكل المكتب'],tasks:['مهامي','قائمة خاصة بك، ما يشوفها غيرك']}[S.tab];
-  $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
+  $('#top').innerHTML=`<div class="bgN">N</div><div class="brand"><div class="logo">N</div><div><b>ABN</b><small>for professional advisory</small></div><button class="qkb" data-act="qk" aria-label="بحث سريع">🔍 بحث سريع <kbd>Ctrl K</kbd></button><button class="avatar setb" data-act="account" aria-label="الإعدادات">⚙️ الإعدادات</button></div><div class="hello"><p>${esc(head[1])}</p><h1>${esc(head[0])}</h1></div>`;
   $('#fab').classList.toggle('hidden',!(S.loaded&&S.tab!=='tasks'&&(S.tab!=='ann'||(isAdmin()&&S.annSeg==='ann'))));
 }
 function unread(){const seen=+(ls('abn_ann_seen')||0);return S.anns.filter(a=>a.created_by!==myId()&&tsMs(a.created_at)>seen).length}
@@ -1013,6 +1042,7 @@ function drawList(){
   const ws=S.works.filter(w=>{const s=statusOf(w);return(S.st==='all'?s!=='rej'&&s!=='can':s===S.st)&&apOk(w)&&(!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q))})
     .sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]||(statusOf(a)==='done'?doneAt(b)-doneAt(a):keyDate(a).localeCompare(keyDate(b))));
   el.innerHTML=sub+(ws.length?`<div class="meta" style="margin:0 4px 8px">${ws.length} عمل</div>`:'')+(ws.length?ws.map(wcard).join(''):'<div class="card empty">ما فيه نتائج.</div>');
+  markSel();
 }
 function vAnn(){
   if(!S.anns.length)return`<div class="card empty">ما فيه تعاميم بعد.${isAdmin()?'<br>اضغط <b>+</b> لنشر أول تعميم.':''}</div>`;
@@ -1020,8 +1050,47 @@ function vAnn(){
 }
 
 /* ---------- النوافذ ---------- */
-function openSheet(html){$('#panel').innerHTML='<div class="grab"></div>'+html;$('#sheet').classList.remove('hidden');$('#panel').scrollTop=0;document.body.style.overflow='hidden';a11y($('#panel'))}
-function closeSheet(){S.sheet=null;$('#sheet').classList.add('hidden');$('#panel').innerHTML='';document.body.style.overflow='';if(S.session&&S.loaded){renderView();if(gOn())loadGChat()}}
+/* ---------- بحث سريع (Ctrl+K) وتحديد العمل المفتوح ---------- */
+let qkSel=0,qkRes=[];
+function qkOpen(){
+  let el=$('#qk');
+  if(!el){
+    el=document.createElement('div');el.id='qk';
+    el.innerHTML='<div class="qkbox"><input class="input" id="qki" placeholder="ابحث عن عمل أو قضية بالاسم أو العميل أو الرقم…" autocomplete="off" aria-label="بحث سريع"><div id="qkr"></div><div class="meta qkh">↑ ↓ للتنقل · Enter للفتح · Esc للإغلاق</div></div>';
+    document.body.appendChild(el);
+    el.addEventListener('click',e=>{if(e.target===el){qkClose();return}const r=e.target.closest('[data-qk]');if(r)qkGo(r.dataset.qk)});
+    $('#qki').addEventListener('input',()=>{qkSel=0;qkDraw()});
+  }
+  el.classList.remove('hidden');$('#qki').value='';qkSel=0;qkDraw();$('#qki').focus();
+}
+function qkClose(){const el=$('#qk');if(el)el.classList.add('hidden')}
+function qkDraw(){
+  const q=$('#qki').value.trim().toLowerCase(),ord={late:0,prog:1,new:2,done:3,rej:4,can:5};
+  qkRes=S.works.filter(w=>!q||[w.title,w.client,w.ref,w.code,typeL(w.type)].join(' ').toLowerCase().includes(q)).sort((a,b)=>ord[statusOf(a)]-ord[statusOf(b)]).slice(0,8);
+  if(qkSel>=qkRes.length)qkSel=0;
+  $('#qkr').innerHTML=qkRes.length?qkRes.map((w,i)=>{const st=statusOf(w);return`<div class="qkrow ${i===qkSel?'on':''}" data-qk="${esc(w.id)}"><div style="min-width:0"><b>${esc(w.title)}</b><span class="meta">${esc([w.client,w.ref,w.code].filter(Boolean).join(' · '))}</span></div><span class="pill ${ST[st].c}">${ST[st].l}</span></div>`}).join(''):'<div class="meta" style="padding:14px">ما لقيت شي بهذا الاسم.</div>';
+}
+function qkGo(id){qkClose();if(S.sheet)closeSheet();if(S.tab!=='works'){S.tab='works';window.scrollTo(0,0);renderAll()}openDetail(id)}
+function markSel(){
+  document.querySelectorAll('.wcard.sel').forEach(x=>x.classList.remove('sel'));
+  if(S.sheet&&S.sheet.kind==='detail'){const c=[...document.querySelectorAll('#list .wcard')].find(x=>x.dataset.open===S.sheet.id);if(c)c.classList.add('sel')}
+}
+document.addEventListener('keydown',e=>{
+  const k=e.key,qk=$('#qk'),open=qk&&!qk.classList.contains('hidden');
+  if((e.ctrlKey||e.metaKey)&&e.code==='KeyK'){if(!S.session||!S.loaded)return;e.preventDefault();open?qkClose():qkOpen();return}
+  if(open){
+    if(k==='Escape'){e.preventDefault();qkClose()}
+    else if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();if(qkRes.length){qkSel=(qkSel+(k==='ArrowDown'?1:-1)+qkRes.length)%qkRes.length;qkDraw()}}
+    else if(k==='Enter'){e.preventDefault();if(qkRes[qkSel])qkGo(qkRes[qkSel].id)}
+    return;
+  }
+  if(k==='Escape'&&S.sheet&&!$('#sheet').classList.contains('hidden')){
+    const t=e.target;if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)){t.blur();return}
+    closeSheet();
+  }
+});
+function openSheet(html){$('#panel').innerHTML='<div class="grab"></div>'+html;$('#sheet').classList.remove('hidden');$('#panel').scrollTop=0;document.body.style.overflow='hidden';document.body.dataset.sheet=(S.sheet&&S.sheet.kind)||'';markSel();a11y($('#panel'))}
+function closeSheet(){S.sheet=null;delete document.body.dataset.sheet;markSel();$('#sheet').classList.add('hidden');$('#panel').innerHTML='';document.body.style.overflow='';if(S.session&&S.loaded){renderView();if(gOn())loadGChat()}}
 function openDetail(id){
   const w=S.works.find(x=>x.id===id);if(!w)return;const fl=isFlow(w);
   S.sheet={kind:'detail',id};
@@ -1245,7 +1314,7 @@ document.addEventListener('click',async e=>{
   if(d.tplrm!==undefined){S.sheet.steps.splice(+d.tplrm,1);drawTpl();return}
   if(d.tplup!==undefined){const i=+d.tplup,a=S.sheet.steps;[a[i-1],a[i]]=[a[i],a[i-1]];drawTpl();return}
   if(d.clr){const i=t.parentElement.querySelector('input[type=date]');if(i&&i.value){i.value='';i.dispatchEvent(new Event('change',{bubbles:true}))}return}
-  if(d.tab){S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();return}
+  if(d.tab){if(S.sheet)closeSheet();S.tab=d.tab;if(S.tab==='ann'){if(S.annSeg==='ann')ls('abn_ann_seen',String(Date.now()));else markSeenG()}window.scrollTo(0,0);renderAll();if(S.tab==='ann'&&S.annSeg==='chat')loadGChat();return}
   if(d.st){S.st=d.st;S.ap='all';document.querySelectorAll('.chips .chip').forEach(b=>b.classList.toggle('on',b.dataset.st===S.st));drawList();return}
   if(d.open){openDetail(d.open);return}
   if(d.ftype){S.sheet.type=d.ftype;S.sheet.steps=[...stepsFor(d.ftype)];drawForm();return}
@@ -1274,6 +1343,7 @@ document.addEventListener('click',async e=>{
   switch(d.act){
     case'close':closeSheet();break;
     case'account':openAccount();break;
+    case'qk':qkOpen();break;
     case'log':openLog();break;
     case'pass':openPass();break;
     case'sendmsg':sendMsg();break;
