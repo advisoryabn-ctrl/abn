@@ -124,6 +124,12 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .acts{display:flex;gap:8px;margin-top:22px}
 .acts button{flex:1;padding:13px;border-radius:12px;font-weight:700}
 .xa button{padding:12px 4px;font-size:13.5px;white-space:nowrap}
+#fv{position:fixed;inset:0;z-index:80;background:rgba(11,37,69,.6);display:flex;align-items:center;justify-content:center;padding:14px}
+.fvp{background:var(--bg);border-radius:18px;padding:16px;width:100%;max-width:560px;max-height:calc(100vh - 28px);overflow:auto}
+.fvi{display:block;max-width:100%;max-height:56vh;margin:0 auto 12px;border-radius:10px;border:1px solid var(--line);background:#fff}
+.fvf{display:block;width:100%;height:62vh;border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:#fff}
+.fva{display:block;text-align:center;text-decoration:none;box-sizing:border-box;cursor:pointer}
+@media(min-width:1000px){.fvp{max-width:880px}}
 .btn2{background:#fff;border:1px solid var(--line)!important;color:var(--navy)}
 .btnd{background:#FDECEA;color:var(--red)}
 .btnd.arm{background:var(--red);color:#fff}
@@ -278,7 +284,7 @@ body[data-pg=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.24.5';
+const APP_V='2026.11.24.6';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -388,7 +394,7 @@ $('#lf').addEventListener('submit',async e=>{
   if(error)toast(!error.status||/fetch|network/i.test(error.message||'')?'تعذر الاتصال، تأكد من الإنترنت':'تأكد من الإيميل وكلمة المرور');
 });
 sb.auth.onAuthStateChange((_e,session)=>{const was=!!S.session;S.session=session;if(!!session!==was||!S.booted){S.booted=true;session?startApp():showLogin()}});
-function showLogin(){S.tasks=[];S.gchat=null;EX.rows=null;UPQ=[];if(UPC)UPC.stop=true;$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
+function showLogin(){S.tasks=[];S.gchat=null;EX.rows=null;UPQ=[];if(UPC)UPC.stop=true;fvClose();$('#login').classList.remove('hidden');['#app','#tabs','#fab'].forEach(s=>$(s).classList.add('hidden'));closeSheet()}
 
 /* ---------- البيانات ---------- */
 let channel=null,loadTimer=null;
@@ -409,7 +415,7 @@ function startApp(){
   $('#login').classList.add('hidden');['#app','#tabs'].forEach(s=>$(s).classList.remove('hidden'));
   S.loaded=false;renderAll();load();pushSync();checkVersion();
   if(channel)sb.removeChannel(channel);
-  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).on('postgres_changes',{event:'*',schema:'public',table:'msg_reads'},onRead).on('postgres_changes',{event:'*',schema:'public',table:'general_reads'},()=>{if(gOn())loadGReads()}).subscribe();
+  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).on('postgres_changes',{event:'*',schema:'public',table:'msg_reads'},onRead).on('postgres_changes',{event:'*',schema:'public',table:'general_reads'},()=>{if(gOn())loadGReads()}).on('postgres_changes',{event:'*',schema:'public',table:'expenses'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'expense_files'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'work_files'},filesSoon).subscribe();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.session){load();checkVersion();if(gOn())loadGChat();if(S.sheet?.kind==='detail')loadChat(S.sheet.id)}});
 
@@ -1115,6 +1121,7 @@ document.addEventListener('keydown',e=>{
     else if(k==='Enter'){e.preventDefault();if(qkRes[qkSel])qkGo(qkRes[qkSel].id)}
     return;
   }
+  if(k==='Escape'&&$('#fv')){e.preventDefault();fvClose();return}
   if(k==='Escape'&&S.sheet&&!$('#sheet').classList.contains('hidden')){
     const t=e.target;if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)){t.blur();return}
     closeSheet();
@@ -1314,7 +1321,7 @@ function fPick(cb,accept){
   document.body.appendChild(i);i.click();
 }
 function fileRow(f,kind,canDel){
-  return`<div class="drow"><label><b style="word-break:break-word">${esc(f.name)}</b><div class="meta" style="margin-top:2px">${fSize(f.size)} · ${esc(nm(f.uploaded_by))} · ${fmtDT(f.created_at)}</div></label><button class="dclr" style="color:var(--navy)" data-fopen="${esc(f.id)}" data-fk="${kind}">فتح</button>${canDel?`<button class="dclr" data-fdel="${esc(f.id)}" data-fk="${kind}">حذف</button>`:''}</div>`;
+  return`<div class="drow"><label><b style="word-break:break-word">${esc(f.name)}</b><div class="meta" style="margin-top:2px">${fSize(f.size)} · ${esc(nm(f.uploaded_by))} · ${fmtDT(f.created_at)}</div></label><button class="dclr" style="color:var(--navy)" data-fopen="${esc(f.id)}" data-fk="${kind}" data-fname="${esc(f.name)}">فتح</button>${canDel?`<button class="dclr" data-fdel="${esc(f.id)}" data-fk="${kind}">حذف</button>`:''}</div>`;
 }
 async function loadFiles(id){
   const {data,error}=await sb.from('work_files').select('*').eq('work_id',id).order('created_at',{ascending:true});
@@ -1327,15 +1334,27 @@ function drawFiles(){
   const list=S.sheet.ferr?'<div class="notice" style="margin:10px 0 0">تعذر تحميل الملفات. تأكد من الاتصال.</div>':fs==null?'<div class="meta" style="padding:10px 0">جاري التحميل…</div>':fs.length?fs.map(f=>fileRow(f,'work',isAdmin())).join(''):'<div class="meta" style="padding:10px 0">ما فيه ملفات مرفوعة.</div>';
   el.innerHTML=`<div class="card" style="padding:4px 14px 14px;margin:0">${list}${upHtml('work',S.sheet.id)}<button class="abtn alt" data-act="fpick">📎 رفع ملف</button><div class="meta" style="margin-top:8px;line-height:1.7">الملف ينحفظ مشفّر وبحجمه الأصلي بدون ضغط. الحد 500 ميجا للملف الواحد.</div></div>`;
 }
-async function fOpen(id,kind){
-  const win=window.open('about:blank','_blank');
+/* عارض الملف: معاينة داخل البرنامج + زر تنزيل */
+let FV=null,expT=null;
+function fvClose(){const el=$('#fv');if(el)el.remove();FV=null}
+async function fOpen(id,kind,name){
+  fvClose();FV={id};
+  const el=document.createElement('div');el.id='fv';
+  el.innerHTML=`<div class="fvp"><div class="row" style="margin-bottom:12px;align-items:flex-start"><b style="word-break:break-word;line-height:1.6">${esc(name||'ملف')}</b><button class="x" data-act="fvclose" aria-label="إغلاق">×</button></div><div id="fvBody"><div class="spin"></div></div></div>`;
+  el.addEventListener('click',e=>{if(e.target===el)fvClose()});
+  document.body.appendChild(el);
   const r=await fApi('link','',FJ({id,kind}));
+  if(!FV||FV.id!==id)return;
+  const b=$('#fvBody');if(!b)return;
   const url=r.status===200&&typeof r.j.url==='string'&&r.j.url.indexOf('https://abnadvisory.com/')===0?r.j.url:'';
-  if(url){if(win)win.location.href=url;else location.href=url;return}
-  if(win)win.close();
-  toast(r.status===410?'الملف غير موجود على التخزين':r.status===404?'الملف محذوف':r.status===401?'انتهت الجلسة، سجّل دخولك من جديد':'تعذر فتح الملف، تأكد من الاتصال');
+  if(!url){b.innerHTML=`<div class="notice" style="margin:0">${r.status===410?'الملف غير موجود على التخزين.':r.status===404?'الملف محذوف.':r.status===401?'انتهت الجلسة، سجّل دخولك من جديد.':'تعذر فتح الملف، تأكد من الاتصال وحاول مرة ثانية.'}</div>`;return}
+  const ext=(String(name||'').split('.').pop()||'').toLowerCase(),img=['jpg','jpeg','png','webp'].includes(ext),pdf=ext==='pdf';
+  b.innerHTML=(img?`<img src="${esc(url)}" alt="" class="fvi">`:pdf&&matchMedia('(min-width:1000px)').matches?`<iframe src="${esc(url)}" class="fvf" title="معاينة الملف"></iframe>`:'')
+    +`<a class="primary fva" href="${esc(url)}&d=1">⬇️ تنزيل الملف</a>${img||pdf?`<a class="abtn alt fva" href="${esc(url)}" target="_blank" rel="noopener">فتح في صفحة مستقلة</a>`:''}<div class="meta" style="margin-top:10px;line-height:1.7">الرابط صالح 5 دقائق. لو انتهى، اقفل وافتح الملف من جديد.</div>`;
 }
-async function fDel(id,kind){
+const expSoon=()=>{clearTimeout(expT);expT=setTimeout(()=>{if(S.tab==='exp'&&S.session)loadExp()},500)};
+const filesSoon=()=>{if(S.sheet?.kind==='detail')loadFiles(S.sheet.id)};
+  async function fDel(id,kind){
   const r=await fApi('del','',FJ({id,kind}));
   toast(r.status===200&&r.j.ok?'تم حذف الملف':r.status===403?'ما عندك صلاحية حذف هذا الملف':'تعذر الحذف');
   if(kind==='work'){if(S.sheet?.kind==='detail')loadFiles(S.sheet.id)}else loadExp();
@@ -1378,7 +1397,7 @@ function openExpForm(){
   openSheet(`<div class="row" style="margin-bottom:14px"><h2 style="font-size:18px">عهدة جديدة</h2><button class="x" data-act="close">×</button></div>
   <div class="f">
   <div class="fld"><label class="lbl">المبلغ (شامل الضريبة)</label><input class="input" id="ex_a" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" dir="ltr"></div>
-  <div class="fld"><label class="lbl">منها ضريبة القيمة المضافة (اختياري)</label><input class="input" id="ex_v" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" dir="ltr"></div>
+  <div class="fld"><label class="lbl">منها ضريبة القيمة المضافة (اختياري)</label><input class="input" id="ex_v" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" dir="ltr"><div class="meta" style="margin-top:5px;line-height:1.7">مثال: فاتورة إجماليها 115 وفيها ضريبة 15، تكتب المبلغ 115 والضريبة 15. لو ما فيها ضريبة اتركها فاضية.</div></div>
   <div class="fld"><label class="lbl">تاريخ الصرف</label><input class="input" id="ex_d" type="date" value="${todayISO()}" max="${todayISO()}"></div>
   <div class="fld"><label class="lbl">وش المصروف؟</label><input class="input" id="ex_t" maxlength="300" placeholder="مثال: اشتراك شهري في موقع"></div>
   <div class="fld"><label class="lbl">الجهة / المورد (اختياري)</label><input class="input" id="ex_s" maxlength="120"></div>
@@ -1536,7 +1555,7 @@ function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}bt
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr],[data-fopen],[data-fdel],[data-expatt],[data-exppost],[data-expdel],[data-exfrm]');if(!t)return;
   const d=t.dataset;
-  if(d.fopen){fOpen(d.fopen,d.fk==='expense'?'expense':'work');return}
+  if(d.fopen){fOpen(d.fopen,d.fk==='expense'?'expense':'work',d.fname);return}
   if(d.fdel){arm(t,'تأكيد','حذف',()=>fDel(d.fdel,d.fk==='expense'?'expense':'work'));return}
   if(d.expatt){const id=d.expatt;fPick(fs=>upAdd('expense',id,fs,()=>loadExp()),'image/*,application/pdf');return}
   if(d.exppost){const x=(EX.rows||[]).find(r=>r.id===d.exppost);if(x&&x.posted_at)arm(t,'تأكيد الإلغاء','إلغاء القيد',()=>expPost(d.exppost));else expPost(d.exppost);return}
@@ -1590,6 +1609,7 @@ document.addEventListener('click',async e=>{
     case'close':closeSheet();break;
     case'fpick':if(w){const id=w.id;fPick(fs=>upAdd('work',id,fs,ok=>{if(ok&&S.sheet?.kind==='detail'&&S.sheet.id===id)loadFiles(id)}))}break;
     case'upstop':if(UPC)UPC.stop=true;break;
+    case'fvclose':fvClose();break;
     case'expprev':expMonth(-1);break;
     case'expnext':expMonth(1);break;
     case'expfpick':if(S.sheet?.kind==='expform')fPick(fs=>{if(S.sheet?.kind!=='expform')return;for(const f of fs){if(!f.size)continue;if(f.size>FMAX){toast('الملف أكبر من 500 ميجا: '+f.name);continue}S.sheet.files.push(f)}drawExpFiles()},'image/*,application/pdf');break;
