@@ -115,6 +115,8 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .steps li.d .t>span{color:var(--mute);text-decoration:line-through}
 .steps .by{display:block;font-size:11px;color:var(--mute)}
 .rm{color:#A0AABB;font-size:19px;padding:0 6px}
+.dgo{color:var(--navy);font-size:24px;line-height:1;padding:0 8px}
+.steps li:not(.d) .t[data-docs]>span:first-child{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:5px}
 .inl{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
 .inl .input{flex:1}
 .sbtn{flex:none;padding:0 15px;height:44px;border-radius:11px;background:var(--navy);color:#fff;font-weight:600;font-size:13px}
@@ -250,11 +252,11 @@ body[data-pg=tasks] main,body[data-pg=ann] main,body[data-pg=exp] main{max-width
 }
 @media(min-width:1200px){
 :root{--dw:min(700px,44vw)}
-body[data-pg=works][data-sheet=detail]{overflow:auto!important}
-body[data-pg=works][data-sheet=detail] #app{margin-left:var(--dw)}
-body[data-pg=works][data-sheet=detail] .sheet{inset:0 auto 0 0;width:var(--dw);background:none;padding:0;align-items:stretch;z-index:30}
-body[data-pg=works][data-sheet=detail] .panel{max-width:none;max-height:none;height:100vh;border-radius:0;animation:none;border-right:1px solid var(--line);box-shadow:6px 0 24px rgba(11,37,69,.07);padding-top:18px}
-body[data-pg=works][data-sheet=detail] .grab{display:none}
+body[data-pg=works]:is([data-sheet=detail],[data-sheet=docs]){overflow:auto!important}
+body[data-pg=works]:is([data-sheet=detail],[data-sheet=docs]) #app{margin-left:var(--dw)}
+body[data-pg=works]:is([data-sheet=detail],[data-sheet=docs]) .sheet{inset:0 auto 0 0;width:var(--dw);background:none;padding:0;align-items:stretch;z-index:30}
+body[data-pg=works]:is([data-sheet=detail],[data-sheet=docs]) .panel{max-width:none;max-height:none;height:100vh;border-radius:0;animation:none;border-right:1px solid var(--line);box-shadow:6px 0 24px rgba(11,37,69,.07);padding-top:18px}
+body[data-pg=works]:is([data-sheet=detail],[data-sheet=docs]) .grab{display:none}
 }
 </style>
 </head>
@@ -284,7 +286,7 @@ body[data-pg=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.25.2';
+const APP_V='2026.11.25.3';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -415,7 +417,7 @@ function startApp(){
   $('#login').classList.add('hidden');['#app','#tabs'].forEach(s=>$(s).classList.remove('hidden'));
   S.loaded=false;renderAll();load();pushSync();checkVersion();
   if(channel)sb.removeChannel(channel);
-  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).on('postgres_changes',{event:'*',schema:'public',table:'msg_reads'},onRead).on('postgres_changes',{event:'*',schema:'public',table:'general_reads'},()=>{if(gOn())loadGReads()}).on('postgres_changes',{event:'*',schema:'public',table:'expenses'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'expense_files'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'work_files'},filesSoon).subscribe();
+  channel=sb.channel('abn-web').on('postgres_changes',{event:'*',schema:'public',table:'works'},loadSoon).on('postgres_changes',{event:'*',schema:'public',table:'announcements'},loadSoon).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},onMsg).on('postgres_changes',{event:'*',schema:'public',table:'msg_reads'},onRead).on('postgres_changes',{event:'*',schema:'public',table:'general_reads'},()=>{if(gOn())loadGReads()}).on('postgres_changes',{event:'*',schema:'public',table:'expenses'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'expense_files'},expSoon).on('postgres_changes',{event:'*',schema:'public',table:'work_files'},filesSoon).on('postgres_changes',{event:'*',schema:'public',table:'doc_requests'},docsSoon).subscribe();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.session){load();checkVersion();if(gOn())loadGChat();if(S.sheet?.kind==='detail')loadChat(S.sheet.id)}});
 
@@ -804,6 +806,7 @@ async function backup(){
     await loadXLSX();
     const [works,msgs,anns,act,profs,tpls]=await Promise.all([allRows('works','created_at'),allRows('messages','created_at'),allRows('announcements','created_at'),allRows('activity','created_at'),allRows('profiles','created_at'),allRows('templates','type')]);
     const [exps,efs,wfs]=await Promise.all([allRows('expenses','created_at'),allRows('expense_files','created_at'),allRows('work_files','created_at')]);
+    const dqs=await allRows('doc_requests','created_at');
     const nm=id=>(profs.find(p=>p.id===id)||{}).full_name||'';
     const wk=id=>works.find(w=>w.id===id)||{};
     const dt=v=>{if(!v)return'';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleString('sv-SE',{timeZone:'Asia/Riyadh'}).slice(0,16)};
@@ -823,7 +826,7 @@ async function backup(){
     const FLS=wfs.map(f=>({'الرمز':wk(f.work_id).code||'','العمل':wk(f.work_id).title||'','اسم الملف':f.name||'','الحجم (بايت)':+f.size||0,'رفعه':nm(f.uploaded_by),'التاريخ':dt(f.created_at)}));
     const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
     const add=(name,rows)=>{const ws=rows.length?XLSX.utils.json_to_sheet(rows):XLSX.utils.aoa_to_sheet([['لا توجد بيانات']]);if(rows.length)ws['!cols']=Object.keys(rows[0]).map(k=>({wch:Math.min(45,Math.max(k.length+2,...rows.slice(0,200).map(r=>String(r[k]==null?'':r[k]).length+2)))}));XLSX.utils.book_append_sheet(wb,ws,name)};
-    add('الأعمال',W);add('مراحل الأعمال',ST);add('الملاحظات',N);add('المحادثات',M);add('التعاميم',A);add('سجل النشاط',L);add('الموظفون',P);add('القوالب والتسعير',T);add('العهد',EXS);add('ملفات الأعمال',FLS);
+    add('الأعمال',W);add('مراحل الأعمال',ST);add('الملاحظات',N);add('المحادثات',M);add('التعاميم',A);add('سجل النشاط',L);add('الموظفون',P);add('القوالب والتسعير',T);add('العهد',EXS);add('ملفات الأعمال',FLS);add('طلبات المستندات',dqs.map(q=>({'الرمز':wk(q.work_id).code||'','العمل':wk(q.work_id).title||'','المستند':q.name||'','مطلوب من':q.from_whom||'','تاريخ الطلب':q.requested_on||'','تاريخ الاستلام':q.received_on||'','استلمه':nm(q.received_by),'سجّله':nm(q.created_by)})));
     const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
     BK={name:'ABN-backup-'+todayISO()+'.xlsx',blob:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})};
     const el=$('#bkBody');
@@ -1113,7 +1116,7 @@ function qkDraw(){
 function qkGo(id){qkClose();if(S.sheet)closeSheet();if(S.tab!=='works'){S.tab='works';window.scrollTo(0,0);renderAll()}openDetail(id)}
 function markSel(){
   document.querySelectorAll('.wcard.sel').forEach(x=>x.classList.remove('sel'));
-  if(S.sheet&&S.sheet.kind==='detail'){const c=[...document.querySelectorAll('#list .wcard')].find(x=>x.dataset.open===S.sheet.id);if(c)c.classList.add('sel')}
+  if(S.sheet&&(S.sheet.kind==='detail'||S.sheet.kind==='docs')){const c=[...document.querySelectorAll('#list .wcard')].find(x=>x.dataset.open===S.sheet.id);if(c)c.classList.add('sel')}
 }
 document.addEventListener('keydown',e=>{
   const k=e.key,qk=$('#qk'),open=qk&&!qk.classList.contains('hidden');
@@ -1142,7 +1145,7 @@ function openDetail(id){
   ${menRow()}<div class="inl"><textarea class="input" id="nmsg" rows="2" placeholder="اكتب رسالة…" maxlength="1000" style="resize:none"></textarea><button class="sbtn" data-act="sendmsg">إرسال</button></div>
   <div class="sec"><h2>سجل النشاط</h2></div><div id="dAct" class="card" style="padding:4px 14px"><div class="meta" style="padding:8px 0">جاري التحميل…</div></div>
   <div id="dActs"></div>`);
-  refreshDetail();drawFiles();loadFiles(id);loadAct(id);S.chat=null;loadChat(id);
+  refreshDetail();drawFiles();loadFiles(id);if(w.type==='fs')loadDocs(id);loadAct(id);S.chat=null;loadChat(id);
 }
 function flowBody(w){
   const e=eff(w),d=w.flow.dates||{},idx=FLOW.findIndex(x=>x[0]===e.base),p=pctOf(w),s=statusOf(w);
@@ -1162,13 +1165,13 @@ function flowBody(w){
   <div class="card" style="margin:0"><b>تواريخ المراحل</b><div class="meta" style="margin:2px 0 6px">تقدر تعدّل أي تاريخ أو تعبّي الناقص، والمهل تنحسب تلقائيًا.</div>${dates}</div>`;
 }
 function stepsBody(w){
-  const p=pctOf(w),s=statusOf(w),st=w.steps||[];
+  const p=pctOf(w),s=statusOf(w),st=w.steps||[],ds=docStep(w),dl=w.type==='fs'&&S.sheet&&S.sheet.id===w.id?(S.sheet.docs||[]).filter(dLate).length:0;
   return`<div class="row" style="justify-content:flex-start"><span class="pill type">${esc(typeL(w.type))}</span><span class="pill ${ST[s].c}">${ST[s].l}</span></div>
   <h2 style="font-size:19px;margin:10px 0 2px;line-height:1.5">${esc(w.title)}</h2><div class="meta">${esc(w.client||'—')}</div>
   <div class="info"><div><small>تاريخ الاستلام</small><b>${fmtD(w.received)}</b></div><div><small>موعد التسليم</small><b>${fmtD(w.due)}</b></div><div><small>رقم القضية / المرجع</small><b>${esc(w.ref||'—')}</b></div><div><small>${w.code?'الرقم المرجعي':'الجلسة القادمة'}</small><b dir="${w.code?'ltr':'rtl'}">${w.code?esc(w.code):fmtD(w.hearing)}</b></div></div>
   <div id="dBrief"></div>
   <div class="card" style="margin:0"><div class="row" style="align-items:flex-end"><b>نسبة الإنجاز</b><span class="big" style="font-size:28px">${p}%</span></div>${bar(p,s)}<div class="meta">${st.filter(x=>x.done).length} من ${st.length} مراحل مكتملة${w.completed_at?' · اكتمل '+fmtD(toISO(parseTS(w.completed_at))):''}</div>
-  <ul class="steps">${st.map((x,i)=>`<li class="${x.done?'d':''}"><button class="chk ${x.done?'on':''}" data-step="${i}">${x.done?IC.check:''}</button><span class="t"><span>${esc(x.t)}</span>${x.done&&x.at?`<span class="by">${x.by?esc(nm(x.by))+' · ':''}${fmtDT(x.at)}</span>`:''}</span><button class="rm" data-rmstep="${i}">×</button></li>`).join('')||'<li class="meta">ما فيه مراحل.</li>'}</ul></div>`;
+  <ul class="steps">${st.map((x,i)=>`<li class="${x.done?'d':''}"><button class="chk ${x.done?'on':''}" data-step="${i}">${x.done?IC.check:''}</button><span class="t"${i===ds?' data-docs="1" role="button" tabindex="0" style="cursor:pointer"':''}><span>${esc(x.t)}</span>${i===ds&&dl?`<b class="by" style="color:var(--red)">${dl} متأخر</b>`:''}${x.done&&x.at?`<span class="by">${x.by?esc(nm(x.by))+' · ':''}${fmtDT(x.at)}</span>`:''}</span>${i===ds?'<button class="dgo" data-docs="1" aria-label="فتح طلبات المستندات">‹</button>':''}<button class="rm" data-rmstep="${i}">×</button></li>`).join('')||'<li class="meta">ما فيه مراحل.</li>'}</ul>${w.type==='fs'&&ds<0?'<button class="abtn alt" data-docs="1">طلبات المستندات</button>':''}</div>`;
 }
 function refreshDetail(){
   const w=S.works.find(x=>x.id===S.sheet?.id);const b=$('#dBody');if(!b)return;if(!w){closeSheet();return}
@@ -1363,7 +1366,66 @@ const filesSoon=()=>{if(S.sheet?.kind==='detail')loadFiles(S.sheet.id)};
   if(kind==='work'){if(S.sheet?.kind==='detail')loadFiles(S.sheet.id)}else loadExp();
 }
 function fGc(){fApi('gc','',{method:'POST'})}
-/* ---------- العهد ---------- */
+/* ---------- طلبات المستندات (مرحلة جمع المستندات في مراجعة القوائم) ---------- */
+const DOCQ=['ميزان المراجعة','كشوف البنوك','سجل الأصول الثابتة','العقود','مصادقات العملاء','مصادقات الموردين','كشف الرواتب','إقرارات الزكاة والضريبة','القوائم المالية للسنة السابقة'];
+const docStep=w=>w&&w.type==='fs'?(w.steps||[]).findIndex(x=>/مستندات/.test(x.t||'')):-1;
+const dWait=r=>Math.max(0,Math.round((Date.parse(todayISO())-Date.parse(r.requested_on))/864e5)||0);
+const dLate=r=>!r.received_on&&dWait(r)>7;
+async function loadDocs(id){
+  const {data,error}=await sb.from('doc_requests').select('*').eq('work_id',id).order('requested_on',{ascending:true}).order('created_at',{ascending:true});
+  if(!S.sheet||S.sheet.id!==id||(S.sheet.kind!=='detail'&&S.sheet.kind!=='docs'))return;
+  S.sheet.docs=error?(S.sheet.docs||null):(data||[]);S.sheet.derr=!!error;
+  if(S.sheet.kind==='docs')drawDocs();else refreshDetail();
+}
+function docRow(x){
+  const ok=!!x.received_on,n=dWait(x),can=x.created_by===myId()||isAdmin();
+  return`<div class="drow" style="align-items:flex-start;gap:10px"><button class="chk ${ok?'on':''}" data-docok="${esc(x.id)}" aria-label="${ok?'إلغاء الاستلام':'تم الاستلام'}" style="margin-top:2px">${ok?IC.check:''}</button><label><b style="word-break:break-word">${esc(x.name)}</b><div class="meta" style="margin-top:2px;line-height:1.8">طُلب ${fmtD(x.requested_on)} · من: ${esc(x.from_whom)}${ok&&x.received_by?'<br>استلمه '+esc(nm(x.received_by)):''}</div><span class="pill ${ok?'st-done':dLate(x)?'st-late':'st-new'}" style="display:inline-block;margin-top:5px">${ok?'وصل '+fmtD(x.received_on):n?'بانتظار · '+n+' يوم':'طُلب اليوم'}</span></label>${can?`<button class="rm" data-docdel="${esc(x.id)}" aria-label="حذف الطلب">×</button>`:''}</div>`;
+}
+function drawDocs(){
+  const el=$('#qBody');if(!el||S.sheet?.kind!=='docs')return;const r=S.sheet.docs;
+  if(r==null){el.innerHTML=S.sheet.derr?'<div class="notice">تعذر تحميل الطلبات. تأكد من الاتصال.</div>':'<div class="card" style="margin:0"><div class="spin"></div></div>';return}
+  const fl=$('#q_fl');if(fl)fl.innerHTML=[...new Set(r.map(x=>x.from_whom))].map(x=>`<option value="${esc(x)}">`).join('');
+  el.innerHTML=`<div class="info" style="grid-template-columns:1fr 1fr 1fr;margin-top:0"><div><small>مطلوب</small><b>${r.length}</b></div><div><small>وصل</small><b>${r.filter(x=>x.received_on).length}</b></div><div><small>متأخر (أكثر من أسبوع)</small><b style="${r.some(dLate)?'color:var(--red)':''}">${r.filter(dLate).length}</b></div></div>`
+    +(r.length?`<div class="card" style="padding:2px 12px;margin:0">${r.map(docRow).join('')}</div>`:'<div class="card empty" style="margin:0">ما فيه طلبات مسجّلة.<br>أضف أول طلب من الخانات اللي تحت.</div>');
+}
+function openDocs(id){
+  const w=S.works.find(x=>x.id===id);if(!w)return;const keep=S.sheet&&S.sheet.id===id?S.sheet.docs:null;
+  S.sheet={kind:'docs',id,docs:keep||null,derr:false};
+  openSheet(`<div class="row"><button class="dclr" style="color:var(--navy);font-size:14px;padding:6px 2px" data-act="docsback">→ رجوع للعمل</button><button class="x" data-act="close">×</button></div>
+  <h2 style="font-size:19px;margin:8px 0 2px;line-height:1.5">جمع المستندات</h2><div class="meta" style="margin-bottom:12px">${esc(w.title)}${w.client?' · '+esc(w.client):''}</div>
+  <div id="qBody"></div>
+  <div class="sec"><h2>طلب جديد</h2></div>
+  <div class="f"><div class="fld"><label class="lbl">اسم المستند</label><input class="input" id="q_n" maxlength="150" placeholder="مثال: كشوف البنوك" list="q_nl" autocomplete="off"><datalist id="q_nl">${DOCQ.map(x=>`<option value="${x}">`).join('')}</datalist></div>
+  <div class="fld"><label class="lbl">مطلوب من</label><input class="input" id="q_f" maxlength="80" placeholder="مثال: خالد (المحاسب)" list="q_fl" autocomplete="off"><datalist id="q_fl"></datalist></div>
+  <div class="fld"><label class="lbl">تاريخ الطلب</label><input class="input" id="q_d" type="date" value="${todayISO()}" max="${todayISO()}"></div>
+  <button class="primary" data-act="docadd">إضافة الطلب</button></div>`);
+  drawDocs();loadDocs(id);
+}
+async function docAdd(){
+  const sh=S.sheet;if(!sh||sh.kind!=='docs'||sh.busy)return;
+  const n=$('#q_n').value.trim(),f=$('#q_f').value.trim(),d=$('#q_d').value;
+  if(!n){toast('اكتب اسم المستند');return}
+  if(!f){toast('اكتب المستند مطلوب من مين');return}
+  if(!d){toast('اختر تاريخ الطلب');return}
+  if(d>todayISO()){toast('تاريخ الطلب في المستقبل');return}
+  sh.busy=true;const {error}=await sb.from('doc_requests').insert({work_id:sh.id,name:n,from_whom:f,requested_on:d});sh.busy=false;
+  if(error){toast('تعذر إضافة الطلب، تأكد من الاتصال');return}
+  if($('#q_n'))$('#q_n').value='';toast('تمت إضافة الطلب');loadDocs(sh.id);
+}
+async function docOk(id){
+  const sh=S.sheet,x=sh&&(sh.docs||[]).find(r=>r.id===id);if(!x||sh.kind!=='docs')return;const was=!!x.received_on;
+  const {data,error}=await sb.from('doc_requests').update({received_on:was?null:todayISO()}).eq('id',id).select();
+  if(error||!data||!data.length){toast('تعذر التعديل، تأكد من الاتصال');return}
+  toast(was?'رجع الطلب بانتظار الاستلام':'تم تسجيل استلام المستند');loadDocs(sh.id);
+}
+async function docDel(id){
+  const sh=S.sheet;if(!sh||sh.kind!=='docs')return;
+  const {data,error}=await sb.from('doc_requests').delete().eq('id',id).select();
+  toast(error||!data||!data.length?'تعذر حذف الطلب':'تم حذف الطلب');loadDocs(sh.id);
+}
+const docsSoon=()=>{if(S.sheet&&(S.sheet.kind==='docs'||(S.sheet.kind==='detail'&&docsOn(S.sheet.id))))loadDocs(S.sheet.id)};
+const docsOn=id=>{const w=S.works.find(x=>x.id===id);return!!w&&w.type==='fs'};
+  /* ---------- العهد ---------- */
 const money=n=>(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const ymNow=()=>todayISO().slice(0,7);
 const ymLbl=ym=>{const[y,m]=ym.split('-').map(Number);return MONTHS[m-1]+' '+y};
@@ -1556,7 +1618,7 @@ let armT=null,factT=0;
 const PREVK={offer:'received',accept:'offer',pay:'accepted',expert:'paid',report:'expert',objection:'report'};
 function arm(btn,label,orig,fn){if(btn.classList.contains('arm')){fn();return}btn.classList.add('arm');btn.textContent=label;clearTimeout(armT);armT=setTimeout(()=>{btn.classList.remove('arm');btn.textContent=orig},3000)}
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr],[data-fopen],[data-fdel],[data-expatt],[data-exppost],[data-expdel],[data-exfrm]');if(!t)return;
+  const t=e.target.closest('[data-tab],[data-open],[data-act],[data-step],[data-rmstep],[data-rmdraft],[data-st],[data-delann],[data-ftype],[data-fact],[data-clr],[data-tplrm],[data-tplup],[data-tpltype],[data-ctype],[data-csize],[data-ctog],[data-men],[data-restore],[data-purge],[data-tdone],[data-tdel],[data-remdel],[data-aseg],[data-ap],[data-creason],[data-bsz],[data-btog],[data-ty],[data-yr],[data-fopen],[data-fdel],[data-expatt],[data-exppost],[data-expdel],[data-exfrm],[data-docs],[data-docok],[data-docdel]');if(!t)return;
   const d=t.dataset;
   if(d.fopen){fOpen(d.fopen,d.fk==='expense'?'expense':'work',d.fname);return}
   if(d.fdel){arm(t,'تأكيد','حذف',()=>fDel(d.fdel,d.fk==='expense'?'expense':'work'));return}
@@ -1564,6 +1626,9 @@ document.addEventListener('click',async e=>{
   if(d.exppost){const x=(EX.rows||[]).find(r=>r.id===d.exppost);if(x&&x.posted_at)arm(t,'تأكيد الإلغاء','إلغاء القيد',()=>expPost(d.exppost));else expPost(d.exppost);return}
   if(d.expdel){arm(t,'تأكيد الحذف','حذف العهدة',()=>expDel(d.expdel));return}
   if(d.exfrm!==undefined&&S.sheet?.kind==='expform'){S.sheet.files.splice(+d.exfrm,1);drawExpFiles();return}
+    if(d.docs!==undefined&&S.sheet?.kind==='detail'){openDocs(S.sheet.id);return}
+  if(d.docok){docOk(d.docok);return}
+  if(d.docdel){arm(t,'تأكيد','×',()=>docDel(d.docdel));return}
     if(d.men){menAdd(d.men);return}
   if(d.ty){S.ty=d.ty;drawList();return}
   if(d.yr){const b=t.classList.contains('abtn');S.yrs[d.yr]=b;drawList();return}
@@ -1613,7 +1678,9 @@ document.addEventListener('click',async e=>{
     case'fpick':if(w){const id=w.id;fPick(fs=>upAdd('work',id,fs,ok=>{if(ok&&S.sheet?.kind==='detail'&&S.sheet.id===id)loadFiles(id)}))}break;
     case'upstop':if(UPC)UPC.stop=true;break;
     case'fvclose':fvClose();break;
-    case'expprev':expMonth(-1);break;
+    case'docsback':if(S.sheet?.kind==='docs')openDetail(S.sheet.id);break;
+    case'docadd':docAdd();break;
+      case'expprev':expMonth(-1);break;
     case'expnext':expMonth(1);break;
     case'expfpick':if(S.sheet?.kind==='expform')fPick(fs=>{if(S.sheet?.kind!=='expform')return;for(const f of fs){if(!f.size)continue;if(f.size>FMAX){toast('الملف أكبر من 500 ميجا: '+f.name);continue}S.sheet.files.push(f)}drawExpFiles()},'image/*,application/pdf');break;
     case'expsave':expSave();break;
