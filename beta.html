@@ -284,7 +284,7 @@ body[data-pg=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.24.6';
+const APP_V='2026.11.25.1';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -1374,7 +1374,7 @@ async function loadExp(){
 }
 function vExpShell(){return'<div id="expTop"></div><div id="expList"></div>'}
 function expCard(x){
-  const open=!x.posted_at,can=open&&(x.created_by===myId()||isAdmin()),fs=x.expense_files||[],busy=!!(UPC&&UPC.kind==='expense'&&UPC.ref===x.id)||UPQ.some(q=>q.kind==='expense'&&q.ref===x.id);
+  const open=!x.posted_at,can=open&&x.created_by===myId(),fs=x.expense_files||[],busy=!!(UPC&&UPC.kind==='expense'&&UPC.ref===x.id)||UPQ.some(q=>q.kind==='expense'&&q.ref===x.id);
   return`<div class="card"><div class="row"><b style="font-size:18px"><span dir="ltr">${money(x.amount)}</span> <small style="font-size:12px;color:var(--mute)">ر.س</small></b><span class="pill ${open?'st-new':'st-done'}">${open?'بانتظار القيد':'تم القيد ✓'}</span></div>
   <div style="margin:8px 0 4px;line-height:1.7;word-break:break-word">${esc(x.description)}</div>
   <div class="meta" style="line-height:1.9">${fmtD(x.spent_on)}${x.vendor?' · '+esc(x.vendor):''}${+x.vat?' · منها ضريبة <span dir="ltr">'+money(x.vat)+'</span>':''}<br>سجّلها ${esc(nm(x.created_by))}${x.posted_at?' · قيّدها '+esc(nm(x.posted_by))+' ('+fmtDT(x.posted_at)+')':''}</div>
