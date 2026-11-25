@@ -124,7 +124,7 @@ main{padding:0 14px;margin-top:-40px;position:relative}
 .acts{display:flex;gap:8px;margin-top:22px}
 .acts button{flex:1;padding:13px;border-radius:12px;font-weight:700}
 .xa button{padding:12px 4px;font-size:13.5px;white-space:nowrap}
-#fv{position:fixed;inset:0;z-index:80;background:rgba(11,37,69,.6);display:flex;align-items:center;justify-content:center;padding:14px}
+#fv{position:fixed;inset:0;z-index:75;background:rgba(11,37,69,.6);display:flex;align-items:center;justify-content:center;padding:14px}
 .fvp{background:var(--bg);border-radius:18px;padding:16px;width:100%;max-width:560px;max-height:calc(100vh - 28px);overflow:auto}
 .fvi{display:block;max-width:100%;max-height:56vh;margin:0 auto 12px;border-radius:10px;border:1px solid var(--line);background:#fff}
 .fvf{display:block;width:100%;height:62vh;border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:#fff}
@@ -284,7 +284,7 @@ body[data-pg=works][data-sheet=detail] .grab{display:none}
 <div id="toast"></div>
 
 <script>
-const APP_V='2026.11.25.1';
+const APP_V='2026.11.25.2';
 const SUPABASE_URL='https://jlckgijotdfozhvffqxx.supabase.co';
 const SUPABASE_KEY='sb_publishable_6ZQjo2e3Cl-FXgg95-V8bA_uw9eql4a';
 if(!window.supabase){document.body.innerHTML='<div style="padding:60px 24px;text-align:center;font:16px/1.9 system-ui;color:#0B2545"><b>تعذر تحميل التطبيق</b><br>تأكد من اتصال الإنترنت ثم أغلق التطبيق وافتحه من جديد.</div>';throw new Error('supabase library not loaded')}
@@ -627,7 +627,7 @@ async function checkVersion(){
     if(j.v===APP_V){if(ls('abn_upd'))ls('abn_upd','');return}
     newV=j.v;
     const typing=document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName);
-    if(!S.sheet&&!typing)applyUpdate(false);else showUpd();
+    if(!S.sheet&&!typing&&!UPC&&!UPQ.length)applyUpdate(false);else showUpd();
   }catch(e){}
 }
 /* ---------- سلة المحذوفات ---------- */
@@ -803,6 +803,7 @@ async function backup(){
   try{
     await loadXLSX();
     const [works,msgs,anns,act,profs,tpls]=await Promise.all([allRows('works','created_at'),allRows('messages','created_at'),allRows('announcements','created_at'),allRows('activity','created_at'),allRows('profiles','created_at'),allRows('templates','type')]);
+    const [exps,efs,wfs]=await Promise.all([allRows('expenses','created_at'),allRows('expense_files','created_at'),allRows('work_files','created_at')]);
     const nm=id=>(profs.find(p=>p.id===id)||{}).full_name||'';
     const wk=id=>works.find(w=>w.id===id)||{};
     const dt=v=>{if(!v)return'';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleString('sv-SE',{timeZone:'Asia/Riyadh'}).slice(0,16)};
@@ -818,13 +819,15 @@ async function backup(){
     const L=act.map(a=>({'التاريخ':dt(a.created_at),'الموظف':nm(a.actor),'الإجراء':a.action||'','العمل':a.work_title||''}));
     const P=profs.map(p=>({'الاسم':p.full_name||'','المسمى':p.title||'','الصلاحية':p.role==='admin'?'مدير':'موظف'}));
     const T=tpls.map(t=>({'النوع':t.type,'المحتوى':JSON.stringify(t.steps)}));
+    const EXS=exps.map(x=>({'التاريخ':x.spent_on||'','البيان':x.description||'','الجهة':x.vendor||'','المبلغ شامل الضريبة':+x.amount||0,'ضريبة القيمة المضافة':+x.vat||0,'الموظف':nm(x.created_by),'الحالة':x.posted_at?'تم القيد':'بانتظار القيد','قيّدها':nm(x.posted_by),'تاريخ القيد':dt(x.posted_at),'المرفقات':efs.filter(f=>f.expense_id===x.id).map(f=>f.name).join(' ، '),'تاريخ التسجيل':dt(x.created_at),'id':x.id}));
+    const FLS=wfs.map(f=>({'الرمز':wk(f.work_id).code||'','العمل':wk(f.work_id).title||'','اسم الملف':f.name||'','الحجم (بايت)':+f.size||0,'رفعه':nm(f.uploaded_by),'التاريخ':dt(f.created_at)}));
     const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
     const add=(name,rows)=>{const ws=rows.length?XLSX.utils.json_to_sheet(rows):XLSX.utils.aoa_to_sheet([['لا توجد بيانات']]);if(rows.length)ws['!cols']=Object.keys(rows[0]).map(k=>({wch:Math.min(45,Math.max(k.length+2,...rows.slice(0,200).map(r=>String(r[k]==null?'':r[k]).length+2)))}));XLSX.utils.book_append_sheet(wb,ws,name)};
-    add('الأعمال',W);add('مراحل الأعمال',ST);add('الملاحظات',N);add('المحادثات',M);add('التعاميم',A);add('سجل النشاط',L);add('الموظفون',P);add('القوالب والتسعير',T);
+    add('الأعمال',W);add('مراحل الأعمال',ST);add('الملاحظات',N);add('المحادثات',M);add('التعاميم',A);add('سجل النشاط',L);add('الموظفون',P);add('القوالب والتسعير',T);add('العهد',EXS);add('ملفات الأعمال',FLS);
     const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
     BK={name:'ABN-backup-'+todayISO()+'.xlsx',blob:new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})};
     const el=$('#bkBody');
-    if(el)el.innerHTML=`<div class="card"><b>النسخة جاهزة</b><div class="meta" style="margin-top:6px;line-height:1.9">الأعمال: <b>${works.length}</b> · الرسائل: <b>${msgs.length}</b> · التعاميم: <b>${anns.length}</b> · سجل النشاط: <b>${act.length}</b><br>الملف: <span dir="ltr">${BK.name}</span></div></div><button class="primary" data-act="bksave">حفظ الملف</button><div class="meta" style="line-height:1.7;margin-top:12px">احفظ الملف في مكان آمن خارج الجوال (مثل الإيميل أو iCloud). الملف فيه كل بيانات المكتب، فلا تشاركه مع أحد من برا.</div>`;
+    if(el)el.innerHTML=`<div class="card"><b>النسخة جاهزة</b><div class="meta" style="margin-top:6px;line-height:1.9">الأعمال: <b>${works.length}</b> · الرسائل: <b>${msgs.length}</b> · التعاميم: <b>${anns.length}</b> · سجل النشاط: <b>${act.length}</b> · العهد: <b>${exps.length}</b><br>الملف: <span dir="ltr">${BK.name}</span></div></div><button class="primary" data-act="bksave">حفظ الملف</button><div class="meta" style="line-height:1.7;margin-top:12px">احفظ الملف في مكان آمن خارج الجوال (مثل الإيميل أو iCloud). الملف فيه كل بيانات المكتب، فلا تشاركه مع أحد من برا.<br>ملفات القضايا وصور الفواتير نفسها ما تدخل في النسخة، تدخل أسماؤها بس.</div>`;
   }catch(e){const el=$('#bkBody');if(el)el.innerHTML='<div class="notice">تعذر تجهيز النسخة. تأكد من الاتصال بالإنترنت وحاول مرة ثانية.</div>'}
   bkBusy=false;
 }
